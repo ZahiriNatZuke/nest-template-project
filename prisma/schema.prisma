@@ -1,0 +1,80 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["fullTextSearch"]
+}
+
+datasource db {
+  provider = "postgres"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                 String    @id @default(uuid())
+  username           String    @unique
+  email              String    @unique
+  fullName           String
+  password           String?
+  resetPasswordToken String?
+  confirmationToken  String?
+  confirmed          Boolean   @default(false)
+  blocked            Boolean   @default(false)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  roleId             String
+  role               Role      @relation(fields: [roleId], references: [id])
+  sessions           Session[]
+
+  @@index([id, email, username])
+}
+
+model Role {
+  id         String   @id @default(uuid())
+  identifier String   @unique
+  name       String   @unique
+  default    Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  users      User[]
+
+  @@index([id, identifier, name])
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  accessToken  String   @unique
+  refreshToken String   @unique
+  device       String   @unique
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([id, userId, device])
+}
+
+model ApiKey {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  application String   @unique
+  default     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([id, key, default, application])
+}
+
+model Settings {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([id, key])
+}
