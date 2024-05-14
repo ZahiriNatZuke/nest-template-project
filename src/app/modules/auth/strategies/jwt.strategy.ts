@@ -5,6 +5,7 @@ import { JWTPayload } from '../interface/jwt.payload';
 import { Session, User } from '@prisma/client';
 import { UserMapper } from '../../user/user.mapper';
 import { PrismaService } from '../../../core/modules/prisma/prisma.service';
+import { envs } from '../../../../config/envs';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -13,7 +14,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     private userMapper: UserMapper,
   ) {
     super({
-      secretOrKey: process.env[ 'JWT_SECRET' ],
+      secretOrKey: envs.JWT_SECRET,
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
     });

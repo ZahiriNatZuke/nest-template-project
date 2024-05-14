@@ -1,5 +1,7 @@
-import { applyDecorators, Controller } from '@nestjs/common';
+import { applyDecorators, Controller, UseGuards } from '@nestjs/common';
 import { ApiSecurity, ApiTags } from '@nestjs/swagger';
+import { envs } from '../../../config/envs';
+import { ApiKeyAuthGuard } from '../../modules/auth/guards/apikey-auth.guard';
 
 export function SetController(route: string) {
   const apiTag = route
@@ -8,8 +10,8 @@ export function SetController(route: string) {
     .join(' ');
   return applyDecorators(
     Controller(route),
-    // UseGuards(ApiKeyAuthGuard),
+    UseGuards(ApiKeyAuthGuard),
     ApiTags(apiTag),
-    ApiSecurity(<string>process.env[ 'HEADER_KEY_API_KEY' ]),
+    ApiSecurity(envs.HEADER_KEY_API_KEY),
   );
 }

@@ -1,5 +1,4 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from './app/core/modules/prisma/prisma.module';
 import { TasksService } from './app/core/services/tasks.service';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -11,16 +10,16 @@ import { SessionModule } from './app/modules/session/session.module';
 import { ApiKeyModule } from './app/modules/api-key/api-key.module';
 import { LoggerModule } from 'nestjs-pino';
 import { createStream } from 'rotating-file-stream';
+import { envs } from './config/envs';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
     ScheduleModule.forRoot(),
     PrismaModule,
     LoggerModule.forRoot({
       pinoHttp: [
         {
-          level: process.env.PINO_LOG_LEVEL || 'info',
+          level: envs.PINO_LOG_LEVEL || 'info',
           formatters: {
             level: (label) => {
               return { level: label.toUpperCase() };

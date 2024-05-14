@@ -3,7 +3,6 @@ import * as bcrypt from 'bcrypt';
 import { User } from '@prisma/client';
 import { JwtService } from '@nestjs/jwt';
 import { JWTPayload } from './interface/jwt.payload';
-import * as process from 'process';
 import { UserMapper } from '../user/user.mapper';
 import { UserService } from '../user/user.service';
 import { pick } from 'lodash';
@@ -14,6 +13,7 @@ import { RecoveryAccountZodDto } from './dto/recovery-account.dto';
 import { RequestRecoveryAccountZodDto } from './dto/request-recovery-account.dto';
 import { ZodValidationException } from 'nestjs-zod';
 import { z } from 'nestjs-zod/z';
+import { envs } from '../../../config/envs';
 
 @Injectable()
 export class AuthService {
@@ -91,8 +91,8 @@ export class AuthService {
         data: {
           accessToken: this.jwtService.sign(data),
           refreshToken: this.jwtService.sign(data, {
-            secret: process.env[ 'JWT_REFRESH_TOKEN_SECRET' ],
-            expiresIn: process.env[ 'EXPIRESIN_REFRESH' ],
+            secret: envs.JWT_REFRESH_TOKEN_SECRET,
+            expiresIn: envs.EXPIRESIN_REFRESH,
           }),
         },
       });
@@ -103,8 +103,8 @@ export class AuthService {
           device,
           accessToken: this.jwtService.sign(data),
           refreshToken: this.jwtService.sign(data, {
-            secret: process.env[ 'JWT_REFRESH_TOKEN_SECRET' ],
-            expiresIn: process.env[ 'EXPIRESIN_REFRESH' ],
+            secret: envs.JWT_REFRESH_TOKEN_SECRET,
+            expiresIn: envs.EXPIRESIN_REFRESH,
           }),
         },
       });
@@ -133,7 +133,7 @@ export class AuthService {
         data: {
           accessToken: this.jwtService.sign(data),
           refreshToken: this.jwtService.sign(data, {
-            secret: process.env[ 'JWT_REFRESH_TOKEN_SECRET' ],
+            secret: envs.JWT_REFRESH_TOKEN_SECRET,
           }),
         },
       });
@@ -252,10 +252,10 @@ export class AuthService {
 
       const payload = pick(user, [ 'name', 'lastname', 'email', 'id' ]);
       const token = this.jwtService.sign({ ...payload, xhr: v4() }, {
-        secret: process.env[ 'JWT_VERIFICATION_TOKEN_SECRET' ],
-        expiresIn: process.env[ 'JWT_VERIFICATION_TOKEN_EXPIRATION_TIME' ],
+        secret: envs.JWT_VERIFICATION_TOKEN_SECRET,
+        expiresIn: envs.JWT_VERIFICATION_TOKEN_EXPIRATION_TIME,
       });
-      const url = `${ process.env[ 'RECOVERY_ACCOUNT_URL' ] }?token=${ token }&email=${ dto.email }`;
+      const url = `${ envs.RECOVERY_ACCOUNT_URL }?token=${ token }&email=${ dto.email }`;
 
       new Logger(AuthService.name).debug(`>> [recovery-url]: ${ url }`);
 
@@ -275,7 +275,7 @@ export class AuthService {
   async decodeVerificationToken(token: string): Promise<boolean> {
     try {
       const payload = await this.jwtService.verify(token, {
-        secret: process.env[ 'JWT_VERIFICATION_TOKEN_SECRET' ],
+        secret: envs.JWT_VERIFICATION_TOKEN_SECRET,
       });
 
       return ( typeof payload === 'object' && 'xhr' in payload );

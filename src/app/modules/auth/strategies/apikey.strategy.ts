@@ -1,8 +1,8 @@
 import { HeaderAPIKeyStrategy } from 'passport-headerapikey';
 import { PassportStrategy } from '@nestjs/passport';
-import { Injectable, UnauthorizedException } from '@nestjs/common';
-import * as process from 'process';
+import { HttpStatus, Injectable, UnauthorizedException } from '@nestjs/common';
 import { AuthService } from '../auth.service';
+import { envs } from '../../../../config/envs';
 
 declare type doneFn = (error: UnauthorizedException | null, data: boolean | null) => unknown;
 
@@ -10,7 +10,7 @@ declare type doneFn = (error: UnauthorizedException | null, data: boolean | null
 export class ApiKeyStrategy extends PassportStrategy(HeaderAPIKeyStrategy, 'ApiKey') {
   constructor(private authService: AuthService) {
     super(
-      { header: <string>process.env[ 'HEADER_KEY_API_KEY' ], prefix: '' },
+      { header: envs.HEADER_KEY_API_KEY, prefix: '' },
       true,
       async (apiKey: string, done: doneFn) => this.validate(apiKey, done),
     );
@@ -21,7 +21,7 @@ export class ApiKeyStrategy extends PassportStrategy(HeaderAPIKeyStrategy, 'ApiK
       ? done(null, true)
       : done(
         new UnauthorizedException({
-          statusCode: 401,
+          statusCode: HttpStatus.UNAUTHORIZED,
           message: 'Api Key Failure',
         }),
         null,

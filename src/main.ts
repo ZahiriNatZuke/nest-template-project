@@ -10,18 +10,18 @@ import { NotFoundExceptionFilter } from './app/core/filters/not-found-exception/
 import { UnauthorizedExceptionFilter } from './app/modules/auth/filters/unauthorized-exception.filter';
 import { Logger as PinoLogger, LoggerErrorInterceptor } from 'nestjs-pino';
 import { patchNestJsSwagger, ZodValidationPipe } from 'nestjs-zod';
+import { envs } from './config/envs';
 
 // Get the host
 export const getHost = () => {
-  if ( process.env[ 'ENVIRONMENT' ] === 'production' )
-    return `https://${ process.env[ 'HOST' ] }`;
-  else return `http://${ process.env[ 'HOST' ] }:${ process.env[ 'PORT' ] }`;
+  if ( envs.ENVIRONMENT === 'production' )
+    return `https://${ envs.HOST }`;
+  else return `http://${ envs.HOST }:${ envs.PORT }`;
 };
 
 async function bootstrap() {
   // Get the global prefix, port, and host
   const globalPrefix = 'api/v1';
-  const port = +process.env[ 'PORT' ]!;
   const host = getHost();
 
   // Create the NestJS application
@@ -60,9 +60,9 @@ async function bootstrap() {
     import('@fastify/rate-limit'),
     {
       global: true, // default true
-      max: +process.env[ 'RATE_LIMIT_MAX' ]!, // default 1000
+      max: envs.RATE_LIMIT_MAX, // default 1000
       ban: 2, // default -1
-      timeWindow: +process.env[ 'RATE_LIMIT_WINDOWS' ]!, // default 1000 * 60
+      timeWindow: envs.RATE_LIMIT_WINDOWS, // default 1000 * 60
       cache: 10000, // default 5000
       allowList: [ '127.0.0.1' ], // default []
       continueExceeding: true, // default false
@@ -98,8 +98,8 @@ async function bootstrap() {
 
   // Register the Swagger documentation
   const options = new DocumentBuilder()
-    .setTitle(<string>process.env[ 'APP_NAME' ])
-    .setVersion(<string>process.env[ 'SWAGGER_VERSION' ])
+    .setTitle(envs.APP_NAME)
+    .setVersion(envs.SWAGGER_VERSION)
     .addBearerAuth(
       { type: 'http', scheme: 'bearer', bearerFormat: 'JWT', in: 'header' },
       'Authorization',
@@ -108,9 +108,9 @@ async function bootstrap() {
       {
         type: 'apiKey',
         in: 'header',
-        name: <string>process.env[ 'HEADER_KEY_API_KEY' ],
+        name: envs.HEADER_KEY_API_KEY,
       },
-      <string>process.env[ 'HEADER_KEY_API_KEY' ],
+      envs.HEADER_KEY_API_KEY,
     )
     .setLicense('MIT', 'https://opensource.org/licenses/MIT')
     .addServer(host)
@@ -132,8 +132,11 @@ async function bootstrap() {
   });
 
   // Start the application
-  const initialLog = `REST API at ${ host }/${ globalPrefix } & Swagger Doc at ${ host }/swagger`;
-  await app.listen(port || 3000, '0.0.0.0', () => Logger.log(initialLog));
+  await app.listen(
+    envs.PORT || 3000,
+    '0.0.0.0',
+    () => Logger.log(`REST API at ${ host }/${ globalPrefix } & Swagger Doc at ${ host }/swagger`),
+  );
 }
 
 bootstrap().then(() => Logger.log('NestJS + Fastify ready to work!'));
