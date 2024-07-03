@@ -2,10 +2,12 @@ import 'dotenv/config';
 import { z } from 'zod';
 
 const envsSchema = z.object({
-  ENVIRONMENT: z.string(),
+  ENVIRONMENT: z.string().default('development'),
   DATABASE_URL: z.string(),
-  PORT: z.coerce.number(),
-  HOST: z.string(),
+  DATABASE_PROVIDER: z.string(),
+  PORT: z.coerce.number().default(3000),
+  HOST: z.string().default('localhost'),
+  ORIGINS: z.string().transform((origins) => origins.split(",")),
   RATE_LIMIT_WINDOWS: z.coerce.number(),
   RATE_LIMIT_MAX: z.coerce.number(),
   JWT_SECRET: z.string(),

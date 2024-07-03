@@ -55,8 +55,9 @@ import { envs } from './config/envs';
         },
         createStream(
           (time: Date, index: number) => {
+            const name = envs.APP_NAME.toLowerCase().replace(/ /g, '-');
             if ( !time ) {
-              return `nest-template-project-current.log`;
+              return `${ name }-current.log`;
             }
 
             let filename = time.toISOString().slice(0, 10);
@@ -64,7 +65,7 @@ import { envs } from './config/envs';
               filename += `.${ index }`;
             }
 
-            return `nest-project-${ filename }.log.gz`;
+            return `${ name }-${ filename }.log.gz`;
           },
           {
             path: './logs',

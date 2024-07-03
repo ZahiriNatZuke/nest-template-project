@@ -20,7 +20,7 @@ export const getHost = () => {
 };
 
 async function bootstrap() {
-  // Get the global prefix, port, and host
+  // Get the global prefix and host
   const globalPrefix = 'api/v1';
   const host = getHost();
 
@@ -29,16 +29,23 @@ async function bootstrap() {
     AppModule,
     new FastifyAdapter({ logger: false }),
   );
+  const { httpAdapter } = app.get(HttpAdapterHost);
 
   // Add the logger to the application
   app.useLogger(app.get(PinoLogger));
 
   // Enable CORS
   app.enableCors({
-    credentials: true,
-    origin: '*',
+    origin: envs.ORIGINS,
     preflightContinue: true,
+    // allowed headers
+    allowedHeaders: [ 'Content-Type', 'Origin', 'X-Requested-With', 'Accept', 'Authorization' ],
+    // headers exposed to the client
+    exposedHeaders: [ 'Authorization' ],
+    credentials: true, // Enable credentials (cookies, authorization headers) cross-origin
     optionsSuccessStatus: 204,
+    maxAge: 86400, // 1 day
+    methods: [ 'GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS' ],
   });
 
   // Enable the shutdown hooks
@@ -46,18 +53,41 @@ async function bootstrap() {
 
   // Register the helmet plugin
   await app.register(
-    import('@fastify/helmet'),
+    () => import('@fastify/helmet'),
     {
-      noSniff: true,
-      xssFilter: true,
+      global: true,
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: [ '\'self\'' ],
+          scriptSrc: [ '\'self\'', '\'unsafe-inline\'' ],
+          styleSrc: [ '\'self\'', '\'unsafe-inline\'' ],
+          imgSrc: [ '\'self\'', 'data:' ],
+          fontSrc: [ '\'self\'' ],
+        },
+      },
+      crossOriginEmbedderPolicy: { policy: 'require-corp' },
+      crossOriginOpenerPolicy: { policy: 'same-origin' },
+      crossOriginResourcePolicy: { policy: 'same-origin' },
+      originAgentCluster: true,
+      referrerPolicy: { policy: 'same-origin' },
+      xContentTypeOptions: true,
+      xDnsPrefetchControl: { allow: true },
+      xDownloadOptions: true,
+      xFrameOptions: { action: 'sameorigin' },
+      xPermittedCrossDomainPolicies: { permittedPolicies: 'none' },
+      xXssProtection: true,
       hidePoweredBy: true,
-      dnsPrefetchControl: { allow: true },
+      strictTransportSecurity: {
+        maxAge: 63072000, // 2 year
+        includeSubDomains: true, // include all subdomains
+        preload: true, // enable preload
+      },
     },
   );
 
   // Register the rate limit plugin
   await app.register(
-    import('@fastify/rate-limit'),
+    () => import('@fastify/rate-limit'),
     {
       global: true, // default true
       max: envs.RATE_LIMIT_MAX, // default 1000
@@ -91,7 +121,7 @@ async function bootstrap() {
   // Register the exception filters
   app.useGlobalFilters(new UnauthorizedExceptionFilter());
   app.useGlobalFilters(new NotFoundExceptionFilter());
-  app.useGlobalFilters(new PrismaClientExceptionFilter(app.get(HttpAdapterHost).httpAdapter));
+  app.useGlobalFilters(new PrismaClientExceptionFilter(httpAdapter));
 
   // Register the error interceptor
   app.useGlobalInterceptors(new LoggerErrorInterceptor());
@@ -101,7 +131,12 @@ async function bootstrap() {
     .setTitle(envs.APP_NAME)
     .setVersion(envs.SWAGGER_VERSION)
     .addBearerAuth(
-      { type: 'http', scheme: 'bearer', bearerFormat: 'JWT', in: 'header' },
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        in: 'header',
+      },
       'Authorization',
     )
     .addApiKey(
