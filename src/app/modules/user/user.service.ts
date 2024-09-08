@@ -12,7 +12,7 @@ export interface UserPagination {
   skip?: number;
   take?: number;
   where?: Prisma.UserWhereInput;
-  orderBy?: Prisma.UserOrderByWithRelationAndSearchRelevanceInput;
+  orderBy?: Prisma.UserOrderByWithRelationInput;
 }
 
 @Injectable()
