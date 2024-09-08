@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { z } from 'zod';
+import process from 'node:process';
 
 const envsSchema = z.object({
   ENVIRONMENT: z.string().default('development'),
@@ -7,7 +8,7 @@ const envsSchema = z.object({
   DATABASE_PROVIDER: z.string(),
   PORT: z.coerce.number().default(3000),
   HOST: z.string().default('localhost'),
-  ORIGINS: z.string().transform((origins) => origins.split(",")),
+  ORIGINS: z.string().transform((origins) => origins.split(',')),
   RATE_LIMIT_WINDOWS: z.coerce.number(),
   RATE_LIMIT_MAX: z.coerce.number(),
   JWT_SECRET: z.string(),
@@ -19,7 +20,10 @@ const envsSchema = z.object({
   EMAIL_CONFIRMATION_URL: z.string(),
   RECOVERY_ACCOUNT_URL: z.string(),
   ADMIN_PASSWORD: z.string(),
-  SWAGGER_VERSION: z.string(),
+  SWAGGER_VERSION: z
+    .string()
+    .default('1.0.0')
+    .transform(() => process.env.npm_package_version || '1.0.0'),
   APP_NAME: z.string(),
   MAIL_USER: z.string(),
   MAIL_FROM: z.string(),
