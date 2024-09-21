@@ -1,6 +1,6 @@
 {
   "name": "nest-template-project",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Template Project of NestJS + Fastify + Prisma + Passport + Pino + Zod",
   "author": {
     "name": "Yohan González Almaguer",
