@@ -1,17 +1,13 @@
+import { ApiKeyController } from '@app/modules/api-key/api-key.controller';
+import { ApiKeyService } from '@app/modules/api-key/api-key.service';
+import { AuthModule } from '@app/modules/auth';
 import { Module } from '@nestjs/common';
-import { ApiKeyService } from './api-key.service';
-import { ApiKeyController } from './api-key.controller';
-import { AuthModule } from '../auth/auth.module';
-import { PrismaModule } from '../../core/modules/prisma/prisma.module';
+import { PrismaModule } from 'nestjs-prisma';
 
 @Module({
-  controllers: [ ApiKeyController ],
-  providers: [ ApiKeyService ],
-  exports: [ ApiKeyService ],
-  imports: [
-    PrismaModule,
-    AuthModule,
-  ],
+	controllers: [ApiKeyController],
+	providers: [ApiKeyService],
+	exports: [ApiKeyService],
+	imports: [PrismaModule, AuthModule],
 })
-export class ApiKeyModule {
-}
+export class ApiKeyModule {}

@@ -1,5 +1,5 @@
 export interface Pagination {
-  take: number;
-  page: number;
-  url: string;
+	take: number;
+	page: number;
+	url: string;
 }

@@ -1,9 +1,8 @@
-import { z } from 'nestjs-zod/z';
 import { createZodDto } from 'nestjs-zod';
+import { z } from 'nestjs-zod/z';
 
 export const RefreshSchema = z.object({
-  refresh: z.string(),
+	refresh: z.string(),
 });
 
-export class RefreshZodDto extends createZodDto(RefreshSchema) {
-}
+export class RefreshZodDto extends createZodDto(RefreshSchema) {}

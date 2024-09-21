@@ -1,15 +1,14 @@
-import { forwardRef, Module } from '@nestjs/common';
-import { UserService } from './user.service';
-import { UserController } from './user.controller';
-import { UserMapper } from './user.mapper';
-import { AuthModule } from '../auth/auth.module';
-import { PrismaModule } from '../../core/modules/prisma/prisma.module';
+import { AuthModule } from '@app/modules/auth';
+import { UserController } from '@app/modules/user/user.controller';
+import { UserMapper } from '@app/modules/user/user.mapper';
+import { UserService } from '@app/modules/user/user.service';
+import { Module, forwardRef } from '@nestjs/common';
+import { PrismaModule } from 'nestjs-prisma';
 
 @Module({
-  providers: [ UserService, UserMapper ],
-  exports: [ UserService, UserMapper ],
-  imports: [ PrismaModule, forwardRef(() => AuthModule) ],
-  controllers: [ UserController ],
+	providers: [UserService, UserMapper],
+	exports: [UserService, UserMapper],
+	imports: [PrismaModule, forwardRef(() => AuthModule)],
+	controllers: [UserController],
 })
-export class UserModule {
-}
+export class UserModule {}

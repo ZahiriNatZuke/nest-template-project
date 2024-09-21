@@ -3,18 +3,18 @@ import { ApiKeyController } from './api-key.controller';
 import { ApiKeyService } from './api-key.service';
 
 describe('ApiKeyController', () => {
-  let controller: ApiKeyController;
+	let controller: ApiKeyController;
 
-  beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
-      controllers: [ ApiKeyController ],
-      providers: [ ApiKeyService ],
-    }).compile();
+	beforeEach(async () => {
+		const module: TestingModule = await Test.createTestingModule({
+			controllers: [ApiKeyController],
+			providers: [ApiKeyService],
+		}).compile();
 
-    controller = module.get<ApiKeyController>(ApiKeyController);
-  });
+		controller = module.get<ApiKeyController>(ApiKeyController);
+	});
 
-  it('should be defined', () => {
-    expect(controller).toBeDefined();
-  });
+	it('should be defined', () => {
+		expect(controller).toBeDefined();
+	});
 });

@@ -1,41 +1,39 @@
-import { ExtractJwt, Strategy } from 'passport-jwt';
-import { PassportStrategy } from '@nestjs/passport';
+import { envs } from '@app/env';
+import { JWTPayload } from '@app/modules/auth/interface';
+import { UserMapper } from '@app/modules/user/user.mapper';
 import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { JWTPayload } from '../interface/jwt.payload';
+import { PassportStrategy } from '@nestjs/passport';
 import { Session, User } from '@prisma/client';
-import { UserMapper } from '../../user/user.mapper';
-import { PrismaService } from '../../../core/modules/prisma/prisma.service';
-import { envs } from '../../../../config/envs';
+import { PrismaService } from 'nestjs-prisma';
+import { ExtractJwt, Strategy } from 'passport-jwt';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor(
-    private prisma: PrismaService,
-    private userMapper: UserMapper,
-  ) {
-    super({
-      secretOrKey: envs.JWT_SECRET,
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
-      ignoreExpiration: false,
-    });
-  }
+	constructor(
+		private prisma: PrismaService,
+		private userMapper: UserMapper
+	) {
+		super({
+			secretOrKey: envs.JWT_SECRET,
+			jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+			ignoreExpiration: false,
+		});
+	}
 
-  async validate(payload: JWTPayload): Promise<Partial<User>> {
-    const { device, userId } = payload;
-    const session: Session = await this.prisma.session.findUniqueOrThrow({
-      where: { device },
-    });
-    if ( session ) {
-      const user: User = await this.prisma.user.findUniqueOrThrow({
-        where: { id: userId },
-      });
-      if ( user ) {
-        return this.userMapper.omitDefault(user);
-      } else {
-        throw new UnauthorizedException('JWT Failure');
-      }
-    } else {
-      throw new UnauthorizedException('Session Failure');
-    }
-  }
+	async validate(payload: JWTPayload): Promise<Partial<User>> {
+		const { device, userId } = payload;
+		const session: Session = await this.prisma.session.findUniqueOrThrow({
+			where: { device },
+		});
+		if (session) {
+			const user: User = await this.prisma.user.findUniqueOrThrow({
+				where: { id: userId },
+			});
+			if (user) {
+				return this.userMapper.omitDefault(user);
+			}
+			throw new UnauthorizedException('JWT Failure');
+		}
+		throw new UnauthorizedException('Session Failure');
+	}
 }

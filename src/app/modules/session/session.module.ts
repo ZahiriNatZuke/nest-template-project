@@ -1,19 +1,14 @@
+import { AuthModule } from '@app/modules/auth';
+import { SessionController } from '@app/modules/session/session.controller';
+import { SessionService } from '@app/modules/session/session.service';
+import { UserModule } from '@app/modules/user';
 import { Module } from '@nestjs/common';
-import { SessionService } from './session.service';
-import { SessionController } from './session.controller';
-import { AuthModule } from '../auth/auth.module';
-import { UserModule } from '../user/user.module';
-import { PrismaModule } from '../../core/modules/prisma/prisma.module';
+import { PrismaModule } from 'nestjs-prisma';
 
 @Module({
-  controllers: [ SessionController ],
-  providers: [ SessionService ],
-  exports: [ SessionService ],
-  imports: [
-    PrismaModule,
-    AuthModule,
-    UserModule,
-  ],
+	controllers: [SessionController],
+	providers: [SessionService],
+	exports: [SessionService],
+	imports: [PrismaModule, AuthModule, UserModule],
 })
-export class SessionModule {
-}
+export class SessionModule {}
