@@ -1,34 +1,34 @@
 import {
-	ArgumentMetadata,
+	HttpException,
 	HttpStatus,
 	Injectable,
-	NotFoundException,
-	ParseUUIDPipe,
 	PipeTransform,
 } from '@nestjs/common';
+import { z } from 'nestjs-zod/z';
 import { UserService } from '../user.service';
 
 @Injectable()
 export class FindUserByIdPipe implements PipeTransform {
 	constructor(private userService: UserService) {}
 
-	async transform(value: string, metadata: ArgumentMetadata) {
-		return new Promise((resolve, reject) => {
-			const uuidPipe = new ParseUUIDPipe({
-				version: '4',
-				errorHttpStatusCode: HttpStatus.BAD_REQUEST,
-			});
-			uuidPipe
-				.transform(value, metadata)
-				.then(async id => {
-					try {
-						const user = await this.userService.findOne({ id }, true);
-						resolve(user);
-					} catch (_) {
-						reject(new NotFoundException('User not found'));
-					}
-				})
-				.catch(() => reject(new NotFoundException('UUID not valid')));
-		});
+	async transform(value: string) {
+		const result = z.string().uuid('Invalid UUID').safeParse(value);
+		if (!result.success)
+			throw new HttpException(
+				{
+					message: result.error.message,
+					error: result.error.errors,
+				},
+				HttpStatus.NOT_FOUND
+			);
+
+		try {
+			return await this.userService.findOne({ id: result.data }, true);
+		} catch (_) {
+			throw new HttpException(
+				{ message: 'User not found' },
+				HttpStatus.NOT_FOUND
+			);
+		}
 	}
 }

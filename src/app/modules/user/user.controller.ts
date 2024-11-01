@@ -93,7 +93,7 @@ export class UserController {
 		});
 	}
 
-	@Get('/:id')
+	@Get(':id')
 	@Auth([AuthRole.ROOT_ROLE, AuthRole.ADMIN_ROLE])
 	@ApiParam({ name: 'id', type: 'string', required: true })
 	async findOne(
@@ -106,7 +106,7 @@ export class UserController {
 		});
 	}
 
-	@Patch('/:id')
+	@Patch(':id')
 	@Auth([AuthRole.ROOT_ROLE, AuthRole.ADMIN_ROLE])
 	@ApiParam({ name: 'id', type: 'string', required: true })
 	async update(
@@ -125,7 +125,7 @@ export class UserController {
 		});
 	}
 
-	@Delete('/:id')
+	@Delete(':id')
 	@Auth([AuthRole.ROOT_ROLE, AuthRole.ADMIN_ROLE])
 	@ApiParam({ name: 'id', type: 'string', required: true })
 	async delete(

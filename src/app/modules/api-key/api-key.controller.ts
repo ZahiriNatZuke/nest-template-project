@@ -60,7 +60,7 @@ export class ApiKeyController {
 		});
 	}
 
-	@Get('/:id')
+	@Get(':id')
 	@ApiParam({ name: 'id', type: 'string', required: true })
 	@Auth([AuthRole.ROOT_ROLE, AuthRole.ADMIN_ROLE])
 	async findOne(
@@ -73,7 +73,7 @@ export class ApiKeyController {
 		});
 	}
 
-	@Patch('/:id')
+	@Patch(':id')
 	@Auth([AuthRole.ROOT_ROLE, AuthRole.ADMIN_ROLE])
 	@ApiParam({ name: 'id', type: 'string', required: true })
 	async update(
@@ -92,7 +92,7 @@ export class ApiKeyController {
 		});
 	}
 
-	@Delete('/:id')
+	@Delete(':id')
 	@Auth([AuthRole.ROOT_ROLE, AuthRole.ADMIN_ROLE])
 	@ApiParam({ name: 'id', type: 'string', required: true })
 	async delete(

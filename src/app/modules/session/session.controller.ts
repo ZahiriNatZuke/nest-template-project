@@ -27,7 +27,7 @@ export class SessionController {
 		});
 	}
 
-	@Delete('/:id')
+	@Delete(':id')
 	@Auth([AuthRole.ROOT_ROLE, AuthRole.ADMIN_ROLE])
 	@ApiParam({ name: 'id', type: 'string', required: true })
 	async delete(

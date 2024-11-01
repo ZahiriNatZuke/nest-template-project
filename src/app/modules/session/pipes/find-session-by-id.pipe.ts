@@ -1,34 +1,34 @@
 import { SessionService } from '@app/modules/session/session.service';
 import {
-	ArgumentMetadata,
+	HttpException,
 	HttpStatus,
 	Injectable,
-	NotFoundException,
-	ParseUUIDPipe,
 	PipeTransform,
 } from '@nestjs/common';
+import { z } from 'nestjs-zod/z';
 
 @Injectable()
 export class FindSessionByIdPipe implements PipeTransform {
 	constructor(private sessionService: SessionService) {}
 
-	transform(value: string, metadata: ArgumentMetadata) {
-		return new Promise((resolve, reject) => {
-			const uuidPipe = new ParseUUIDPipe({
-				version: '4',
-				errorHttpStatusCode: HttpStatus.BAD_REQUEST,
-			});
-			uuidPipe
-				.transform(value, metadata)
-				.then(async id => {
-					try {
-						const session = await this.sessionService.findOne({ id }, true);
-						resolve(session);
-					} catch (_) {
-						reject(new NotFoundException('Session not found'));
-					}
-				})
-				.catch(() => reject(new NotFoundException('UUID not valid')));
-		});
+	async transform(value: string) {
+		const result = z.string().uuid('Invalid UUID').safeParse(value);
+		if (!result.success)
+			throw new HttpException(
+				{
+					message: result.error.message,
+					error: result.error.errors,
+				},
+				HttpStatus.NOT_FOUND
+			);
+
+		try {
+			return await this.sessionService.findOne({ id: result.data }, true);
+		} catch (_) {
+			throw new HttpException(
+				{ message: 'Session not found' },
+				HttpStatus.NOT_FOUND
+			);
+		}
 	}
 }
