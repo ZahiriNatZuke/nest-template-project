@@ -43,3 +43,5 @@ export const RecoveryAccountSchema = z.object({
 export class RecoveryAccountZodDto extends createZodDto(
 	RecoveryAccountSchema
 ) {}
+
+export type RecoveryAccountDto = z.infer<typeof RecoveryAccountSchema>;

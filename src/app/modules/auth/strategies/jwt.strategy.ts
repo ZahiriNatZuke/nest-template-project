@@ -1,7 +1,7 @@
 import { envs } from '@app/env';
 import { JWTPayload } from '@app/modules/auth/interface';
 import { UserMapper } from '@app/modules/user/user.mapper';
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { Session, User } from '@prisma/client';
 import { PrismaService } from 'nestjs-prisma';
@@ -32,8 +32,14 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 			if (user) {
 				return this.userMapper.omitDefault(user);
 			}
-			throw new UnauthorizedException('JWT Failure');
+			throw new HttpException(
+				{ message: 'JWT Failure' },
+				HttpStatus.UNAUTHORIZED
+			);
 		}
-		throw new UnauthorizedException('Session Failure');
+		throw new HttpException(
+			{ message: 'Session Failure' },
+			HttpStatus.UNAUTHORIZED
+		);
 	}
 }

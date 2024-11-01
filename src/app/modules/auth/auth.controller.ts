@@ -2,14 +2,14 @@ import {
 	Body,
 	Get,
 	Headers,
+	HttpException,
 	HttpStatus,
 	Post,
 	Req,
 	Res,
-	UnauthorizedException,
 	UseGuards,
 } from '@nestjs/common';
-import { Session, User } from '@prisma/client';
+import { Session } from '@prisma/client';
 import { AuthService } from './auth.service';
 
 import { AppController } from '@app/core/decorators';
@@ -27,7 +27,7 @@ import { AuthRole } from '@app/modules/auth/enums';
 import { LocalAuthGuard } from '@app/modules/auth/guards';
 import { UserMapper } from '@app/modules/user/user.mapper';
 import { UserService } from '@app/modules/user/user.service';
-import { FastifyReply, FastifyRequest } from 'fastify';
+import { FastifyReply } from 'fastify';
 
 @AppController('auth')
 export class AuthController {
@@ -46,7 +46,10 @@ export class AuthController {
 	) {
 		const { device } = loginDTO;
 		if (!validatedUser.status || validatedUser.status === 'miss_activate') {
-			throw new UnauthorizedException('Login Failure');
+			throw new HttpException(
+				{ message: 'Login Failure' },
+				HttpStatus.UNAUTHORIZED
+			);
 		}
 
 		const session: Session = await this.authService.generateSession(

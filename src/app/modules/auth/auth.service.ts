@@ -1,11 +1,11 @@
 import { SafeUser, ValidatedUser } from '@app/core/types';
 import { envs } from '@app/env';
 import {
-	RecoveryAccountZodDto,
+	RecoveryAccountDto,
 	RequestRecoveryAccountZodDto,
 	UpdatePasswordZodDto,
 } from '@app/modules/auth/dto';
-import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { User } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
@@ -55,7 +55,10 @@ export class AuthService {
 				status: false,
 			};
 		} catch (e) {
-			throw new UnauthorizedException('Login Failure');
+			throw new HttpException(
+				{ message: 'Login Failure' },
+				HttpStatus.UNAUTHORIZED
+			);
 		}
 	}
 
@@ -195,8 +198,12 @@ export class AuthService {
 		});
 	}
 
-	async recoverAccount(dto: RecoveryAccountZodDto) {
-		if (dto.newPassword !== dto.confirmNewPassword) {
+	async recoverAccount({
+		email,
+		newPassword,
+		confirmNewPassword,
+	}: RecoveryAccountDto) {
+		if (newPassword !== confirmNewPassword) {
 			throw new ZodValidationException(
 				z.ZodError.create([
 					{
@@ -210,16 +217,14 @@ export class AuthService {
 
 		try {
 			const userDb = await this.prisma.user.findUniqueOrThrow({
-				where: { email: dto.email },
+				where: { email },
 			});
 
-			const newPassword = await bcrypt.hash(
-				dto.newPassword,
-				bcrypt.genSaltSync(16)
-			);
 			return this.prisma.user.update({
 				where: { id: userDb.id },
-				data: { password: newPassword },
+				data: {
+					password: await bcrypt.hash(newPassword, bcrypt.genSaltSync(16)),
+				},
 			});
 		} catch (_) {
 			throw new ZodValidationException(

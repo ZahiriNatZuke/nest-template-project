@@ -1,6 +1,6 @@
 import { AuthRole } from '@app/modules/auth/enums';
 import { CreateUserZodDto, UpdateUserZodDto } from '@app/modules/user/dto';
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { Prisma, User } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from 'nestjs-prisma';
@@ -111,7 +111,10 @@ export class UserService {
 				);
 			}
 		} else {
-			throw new NotFoundException('Default Role not found');
+			throw new HttpException(
+				{ message: 'Default Role not found' },
+				HttpStatus.NOT_FOUND
+			);
 		}
 	}
 }
