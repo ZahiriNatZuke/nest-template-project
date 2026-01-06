@@ -5,7 +5,7 @@ import {
 	Injectable,
 	PipeTransform,
 } from '@nestjs/common';
-import { z } from 'nestjs-zod/z';
+import { z } from 'zod';
 
 @Injectable()
 export class FindSettingByKeyPipe implements PipeTransform {
@@ -17,7 +17,7 @@ export class FindSettingByKeyPipe implements PipeTransform {
 			throw new HttpException(
 				{
 					message: result.error.message,
-					error: result.error.errors,
+					error: result.error.issues,
 				},
 				HttpStatus.NOT_FOUND
 			);

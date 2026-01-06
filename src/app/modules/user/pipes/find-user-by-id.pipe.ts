@@ -4,7 +4,7 @@ import {
 	Injectable,
 	PipeTransform,
 } from '@nestjs/common';
-import { z } from 'nestjs-zod/z';
+import { z } from 'zod';
 import { UserService } from '../user.service';
 
 @Injectable()
@@ -17,7 +17,7 @@ export class FindUserByIdPipe implements PipeTransform {
 			throw new HttpException(
 				{
 					message: result.error.message,
-					error: result.error.errors,
+					error: result.error.issues,
 				},
 				HttpStatus.NOT_FOUND
 			);

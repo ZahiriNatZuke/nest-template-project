@@ -1,3 +1,17 @@
+import { AppController } from '@app/core/decorators/app-controller/app-controller.decorator';
+import {
+	ApiPaginationDecorator,
+	PaginationDecorator,
+} from '@app/core/decorators/paginator/pagination.decorator';
+import { TrimQuerySearchPipe } from '@app/core/pipes/trim-query-search/trim-query-search.pipe';
+import { Pagination } from '@app/core/types/interfaces/pagination';
+import { generateMetadata } from '@app/core/utils/generate-metadata';
+import { Authz } from '@app/modules/auth/decorators/authz.decorator';
+import { AssignRoleZodDto } from '@app/modules/user/dto/assign-role.dto';
+import { CreateUserZodDto } from '@app/modules/user/dto/create-user.dto';
+import { UpdateUserZodDto } from '@app/modules/user/dto/update-user.dto';
+import { FindUserByIdPipe } from '@app/modules/user/pipes/find-user-by-id.pipe';
+import { UserMapper } from '@app/modules/user/user.mapper';
 import {
 	Body,
 	Delete,
@@ -10,25 +24,10 @@ import {
 	Res,
 } from '@nestjs/common';
 import { ApiParam, ApiQuery } from '@nestjs/swagger';
-import { UserPagination, UserService } from './user.service';
-
 import { User } from '@prisma/client';
-import { isNil, omitBy } from 'lodash';
-
-import {
-	ApiPaginationDecorator,
-	AppController,
-	PaginationDecorator,
-} from '@app/core/decorators';
-import { TrimQuerySearchPipe } from '@app/core/pipes';
-import { Pagination } from '@app/core/types';
-import { generateMetadata } from '@app/core/utils';
-import { Auth } from '@app/modules/auth/decorators';
-import { AuthRole } from '@app/modules/auth/enums';
-import { CreateUserZodDto, UpdateUserZodDto } from '@app/modules/user/dto';
-import { FindUserByIdPipe } from '@app/modules/user/pipes';
-import { UserMapper } from '@app/modules/user/user.mapper';
 import { FastifyReply } from 'fastify';
+import { isNil, omitBy } from 'lodash';
+import { UserPagination, UserService } from './user.service';
 
 @AppController('user')
 export class UserController {
@@ -38,7 +37,7 @@ export class UserController {
 	) {}
 
 	@Post()
-	@Auth([AuthRole.ROOT_ROLE, AuthRole.ADMIN_ROLE])
+	@Authz('users:write')
 	async create(@Res() res: FastifyReply, @Body() payload: CreateUserZodDto) {
 		const user = await this.userService.create(payload);
 		return res.code(HttpStatus.CREATED).send({
@@ -49,7 +48,7 @@ export class UserController {
 	}
 
 	@Get()
-	@Auth([AuthRole.ROOT_ROLE, AuthRole.ADMIN_ROLE])
+	@Authz('users:read')
 	@ApiQuery({ name: 'querySearch', required: false })
 	@ApiPaginationDecorator()
 	async findMany(
@@ -67,19 +66,16 @@ export class UserController {
 					{
 						fullName: {
 							contains: querySearch,
-							mode: 'insensitive',
 						},
 					},
 					{
 						email: {
 							contains: querySearch,
-							mode: 'insensitive',
 						},
 					},
 					{
 						username: {
 							contains: querySearch,
-							mode: 'insensitive',
 						},
 					},
 				],
@@ -94,7 +90,7 @@ export class UserController {
 	}
 
 	@Get(':id')
-	@Auth([AuthRole.ROOT_ROLE, AuthRole.ADMIN_ROLE])
+	@Authz('users:read')
 	@ApiParam({ name: 'id', type: 'string', required: true })
 	async findOne(
 		@Res() res: FastifyReply,
@@ -107,7 +103,7 @@ export class UserController {
 	}
 
 	@Patch(':id')
-	@Auth([AuthRole.ROOT_ROLE, AuthRole.ADMIN_ROLE])
+	@Authz('users:write')
 	@ApiParam({ name: 'id', type: 'string', required: true })
 	async update(
 		@Res() res: FastifyReply,
@@ -126,7 +122,7 @@ export class UserController {
 	}
 
 	@Delete(':id')
-	@Auth([AuthRole.ROOT_ROLE, AuthRole.ADMIN_ROLE])
+	@Authz('users:delete')
 	@ApiParam({ name: 'id', type: 'string', required: true })
 	async delete(
 		@Res() res: FastifyReply,
@@ -137,6 +133,39 @@ export class UserController {
 			statusCode: 200,
 			data: userDeleted,
 			message: 'User deleted',
+		});
+	}
+
+	@Post(':id/roles')
+	@Authz('users:write')
+	@ApiParam({ name: 'id', type: String })
+	async assignRole(
+		@Res() res: FastifyReply,
+		@Param('id') userId: string,
+		@Body() payload: AssignRoleZodDto
+	) {
+		const user = await this.userService.assignRole(userId, payload.roleId);
+		return res.code(HttpStatus.OK).send({
+			statusCode: 200,
+			data: this.userMapper.omitDefault(user),
+			message: 'Role assigned to user',
+		});
+	}
+
+	@Delete(':id/roles/:roleId')
+	@Authz('users:write')
+	@ApiParam({ name: 'id', type: String })
+	@ApiParam({ name: 'roleId', type: String })
+	async removeRole(
+		@Res() res: FastifyReply,
+		@Param('id') userId: string,
+		@Param('roleId') roleId: string
+	) {
+		const user = await this.userService.removeRole(userId, roleId);
+		return res.code(HttpStatus.OK).send({
+			statusCode: 200,
+			data: this.userMapper.omitDefault(user),
+			message: 'Role removed from user',
 		});
 	}
 }

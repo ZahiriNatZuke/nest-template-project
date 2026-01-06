@@ -1,12 +1,11 @@
-import {
-	CreateApiKeyZodDto,
-	UpdateApiKeyZodDto,
-} from '@app/modules/api-key/dto';
+import { randomBytes } from 'node:crypto';
+import { PrismaService } from '@app/core/services/prisma/prisma.service';
+import { ZodValidationException } from '@app/core/utils/zod';
+import { CreateApiKeyZodDto } from '@app/modules/api-key/dto/create-api-key.dto';
 import { Injectable } from '@nestjs/common';
 import { ApiKey, Prisma } from '@prisma/client';
-import { PrismaService } from 'nestjs-prisma';
-import { ZodValidationException } from 'nestjs-zod';
-import { z } from 'nestjs-zod/z';
+import * as bcrypt from 'bcrypt';
+import { z } from 'zod';
 
 @Injectable()
 export class ApiKeyService {
@@ -53,14 +52,18 @@ export class ApiKeyService {
 		});
 	}
 
-	async create({
-		application,
-	}: CreateApiKeyZodDto): Promise<Omit<ApiKey, 'key'>> {
+	async create({ application }: CreateApiKeyZodDto): Promise<{
+		apiKey: Omit<ApiKey, 'keyHash'>;
+		plainKey: string;
+	}> {
 		try {
-			return this.prisma.apiKey.create({
+			const plainKey = randomBytes(64).toString('base64');
+			const keyHash = await bcrypt.hash(plainKey, bcrypt.genSaltSync(12));
+
+			const apiKey = await this.prisma.apiKey.create({
 				data: {
 					application,
-					key: require('node:crypto').randomBytes(64).toString('base64'),
+					keyHash,
 				},
 				select: {
 					id: true,
@@ -70,9 +73,12 @@ export class ApiKeyService {
 					updatedAt: true,
 				},
 			});
-		} catch (e) {
+
+			// Return plain key ONLY on creation (one-time reveal)
+			return { apiKey, plainKey };
+		} catch (_e) {
 			throw new ZodValidationException(
-				z.ZodError.create([
+				new z.ZodError([
 					{
 						code: 'custom',
 						path: [],
@@ -83,46 +89,20 @@ export class ApiKeyService {
 		}
 	}
 
-	async update(params: {
-		where: Prisma.ApiKeyWhereUniqueInput;
-		data: UpdateApiKeyZodDto;
-	}): Promise<Omit<ApiKey, 'key'>> {
-		const { where, data } = params;
-		await this.prisma.apiKey.update({
-			where,
-			data: {
-				application: data.application,
-			},
+	async validateApiKey(plainKey: string): Promise<boolean> {
+		const allKeys = await this.prisma.apiKey.findMany({
+			select: { keyHash: true },
 		});
 
-		if (data?.rollApiKey)
-			await this.prisma.apiKey.update({
-				where,
-				data: {
-					key: require('node:crypto').randomBytes(64).toString('base64'),
-				},
-			});
-
-		return this.prisma.apiKey.findUniqueOrThrow({
-			where,
-			select: {
-				id: true,
-				application: true,
-				default: true,
-				createdAt: true,
-				updatedAt: true,
-			},
-		});
+		for (const k of allKeys) {
+			if (await bcrypt.compare(plainKey, k.keyHash)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	async delete(where: Prisma.ApiKeyWhereUniqueInput): Promise<ApiKey> {
 		return this.prisma.apiKey.delete({ where });
-	}
-
-	async getKey(id: string) {
-		return this.prisma.apiKey.findUnique({
-			where: { id },
-			select: { key: true },
-		});
 	}
 }

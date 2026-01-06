@@ -1,10 +1,10 @@
+import { PrismaService } from '@app/core/services/prisma/prisma.service';
 import { envs } from '@app/env';
-import { JWTPayload } from '@app/modules/auth/interface';
+import { JWTPayload } from '@app/modules/auth/interface/jwt.payload';
 import { UserMapper } from '@app/modules/user/user.mapper';
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { Session, User } from '@prisma/client';
-import { PrismaService } from 'nestjs-prisma';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 
 @Injectable()
@@ -20,17 +20,23 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 		});
 	}
 
-	async validate(payload: JWTPayload): Promise<Partial<User>> {
-		const { device, userId } = payload;
+	async validate(
+		payload: JWTPayload
+	): Promise<Partial<User> & { perm?: string[] }> {
+		const { device, userId, perm } = payload;
 		const session: Session = await this.prisma.session.findUniqueOrThrow({
-			where: { device },
+			where: { userId_device: { userId, device } },
 		});
 		if (session) {
 			const user: User = await this.prisma.user.findUniqueOrThrow({
 				where: { id: userId },
 			});
 			if (user) {
-				return this.userMapper.omitDefault(user);
+				const safe = this.userMapper.omitDefault(user) as Partial<User> & {
+					perm?: string[];
+				};
+				safe.perm = perm;
+				return safe;
 			}
 			throw new HttpException(
 				{ message: 'JWT Failure' },

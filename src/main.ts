@@ -1,7 +1,6 @@
-import {
-	HttpExceptionFilter,
-	ZodValidationExceptionFilter,
-} from '@app/core/filters'; // Get the host
+import { HttpExceptionFilter } from '@app/core/filters/http-exception/http-exception.filter';
+import { ZodValidationExceptionFilter } from '@app/core/filters/zod-validation/zod-validation.filter';
+import { ZodValidationPipe } from '@app/core/pipes/zod-validation.pipe';
 import { envs } from '@app/env';
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
@@ -11,7 +10,7 @@ import {
 } from '@nestjs/platform-fastify';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { LoggerErrorInterceptor, Logger as PinoLogger } from 'nestjs-pino';
-import { ZodValidationPipe, patchNestJsSwagger } from 'nestjs-zod';
+
 import { AppModule } from './app.module';
 
 // Get the host
@@ -28,11 +27,20 @@ async function bootstrap() {
 	// Create the NestJS application
 	const app = await NestFactory.create<NestFastifyApplication>(
 		AppModule,
-		new FastifyAdapter({ logger: false })
+		new FastifyAdapter({
+			logger: false,
+			routerOptions: {
+				ignoreTrailingSlash: true,
+				ignoreDuplicateSlashes: true,
+			},
+		})
 	);
 
 	// Add the logger to the application
 	app.useLogger(app.get(PinoLogger));
+
+	// Register cookie plugin for Fastify
+	await app.register(require('@fastify/cookie'));
 
 	// Enable CORS
 	app.enableCors({
@@ -45,9 +53,11 @@ async function bootstrap() {
 			'X-Requested-With',
 			'Accept',
 			'Authorization',
+			envs.HEADER_KEY_API_KEY,
+			'X-CSRF-Token',
 		],
 		// headers exposed to the client
-		exposedHeaders: ['Authorization'],
+		exposedHeaders: ['Authorization', 'Set-Cookie'],
 		credentials: true, // Enable credentials (cookies, authorization headers) cross-origin
 		optionsSuccessStatus: 204,
 		maxAge: 86400, // 1 day
@@ -151,9 +161,6 @@ async function bootstrap() {
 		.setLicense('MIT', 'https://opensource.org/licenses/MIT')
 		.addServer(host)
 		.build();
-
-	// Patch the NestJS Swagger
-	patchNestJsSwagger();
 
 	// Create the Swagger document
 	const appDocument = SwaggerModule.createDocument(app, options, {

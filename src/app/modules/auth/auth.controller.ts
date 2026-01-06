@@ -1,7 +1,19 @@
+import { AppController } from '@app/core/decorators/app-controller/app-controller.decorator';
+import { CsrfService } from '@app/core/services/csrf/csrf.service';
+import { AppRequest, AuthRequest } from '@app/core/types/app-request';
+import { LoginZodDto } from '@app/modules/auth/dto/login.dto';
+import { RecoveryAccountZodDto } from '@app/modules/auth/dto/recovery-account.dto';
+import { RequestRecoveryAccountZodDto } from '@app/modules/auth/dto/request-recovery-account.dto';
+import { TokenZodDto } from '@app/modules/auth/dto/token.dto';
+import { UpdatePasswordZodDto } from '@app/modules/auth/dto/update-password.dto';
+import { CsrfGuard } from '@app/modules/auth/guards/csrf.guard';
+import { JwtAuthGuard } from '@app/modules/auth/guards/jwt-auth.guard';
+import { LocalAuthGuard } from '@app/modules/auth/guards/local-auth.guard';
+import { UserMapper } from '@app/modules/user/user.mapper';
+import { UserService } from '@app/modules/user/user.service';
 import {
 	Body,
 	Get,
-	Headers,
 	HttpException,
 	HttpStatus,
 	Post,
@@ -9,42 +21,41 @@ import {
 	Res,
 	UseGuards,
 } from '@nestjs/common';
-import { Session } from '@prisma/client';
-import { AuthService } from './auth.service';
-
-import { AppController } from '@app/core/decorators';
-import { AppRequest, AuthRequest } from '@app/core/types';
-import { Auth } from '@app/modules/auth/decorators';
-import {
-	LoginZodDto,
-	RecoveryAccountZodDto,
-	RefreshZodDto,
-	RequestRecoveryAccountZodDto,
-	TokenZodDto,
-} from '@app/modules/auth/dto';
-import { UpdatePasswordZodDto } from '@app/modules/auth/dto/update-password.dto';
-import { AuthRole } from '@app/modules/auth/enums';
-import { LocalAuthGuard } from '@app/modules/auth/guards';
-import { UserMapper } from '@app/modules/user/user.mapper';
-import { UserService } from '@app/modules/user/user.service';
 import { FastifyReply } from 'fastify';
+import { AuthService } from './auth.service';
 
 @AppController('auth')
 export class AuthController {
 	constructor(
 		private authService: AuthService,
 		private userService: UserService,
-		private userMapper: UserMapper
+		private userMapper: UserMapper,
+		private csrfService: CsrfService
 	) {}
 
+	@Get('csrf')
+	async getCsrfToken(@Res() res: FastifyReply) {
+		const csrfToken = this.csrfService.generateToken();
+
+		res.header(
+			'Set-Cookie',
+			`XSRF-TOKEN=${csrfToken}; Path=/; HttpOnly=false; Secure=${process.env.NODE_ENV === 'production'}; SameSite=Strict`
+		);
+
+		return res.code(HttpStatus.OK).send({
+			statusCode: 200,
+			csrfToken,
+		});
+	}
+
 	@Post('login')
-	@UseGuards(LocalAuthGuard)
+	@UseGuards(LocalAuthGuard, CsrfGuard)
 	async login(
 		@Res() res: FastifyReply,
 		@Body() loginDTO: LoginZodDto,
 		@Req() { user: validatedUser }: AppRequest
 	) {
-		const { device } = loginDTO;
+		const { device, rememberMe } = loginDTO;
 		if (!validatedUser.status || validatedUser.status === 'miss_activate') {
 			throw new HttpException(
 				{ message: 'Login Failure' },
@@ -52,24 +63,26 @@ export class AuthController {
 			);
 		}
 
-		const session: Session = await this.authService.generateSession(
+		const session = await this.authService.generateSession(
 			validatedUser.user,
 			device
 		);
 
+		// Set HttpOnly cookies
+		const accessCookie = `accessToken=${session.accessToken}; Path=/; HttpOnly; Secure=${process.env.NODE_ENV === 'production'}; SameSite=Strict; Max-Age=900`;
+		const refreshCookie = `refreshToken=${session.refreshToken}; Path=/api/v1/auth/refresh; HttpOnly; Secure=${process.env.NODE_ENV === 'production'}; SameSite=Strict; Max-Age=${rememberMe ? 7 * 24 * 60 * 60 : ''}`;
+
+		res.header('Set-Cookie', [accessCookie, refreshCookie]);
+
 		return res.code(HttpStatus.OK).send({
 			statusCode: 200,
-			data: {
-				access: session.accessToken,
-				refresh: session.refreshToken,
-				user: validatedUser.user,
-			},
+			user: validatedUser.user,
 			message: 'Login Success',
 		});
 	}
 
 	@Get('me')
-	@Auth(Object.values(AuthRole))
+	@UseGuards(JwtAuthGuard)
 	async me(@Res() res: FastifyReply, @Req() req: AuthRequest) {
 		const user = await this.userService.findOne({ id: req.user.id });
 		if (!user) return res.code(HttpStatus.NOT_FOUND);
@@ -79,17 +92,58 @@ export class AuthController {
 		});
 	}
 
+	@Get('permissions/me')
+	@UseGuards(JwtAuthGuard)
+	async getMyPermissions(@Res() res: FastifyReply, @Req() req: AuthRequest) {
+		// Retornar permisos desde JWT (cache) o DB fallback
+		let permissions: string[];
+		const userWithPerm = req.user as typeof req.user & { perm?: string[] };
+
+		if (userWithPerm.perm && Array.isArray(userWithPerm.perm)) {
+			permissions = userWithPerm.perm;
+		} else {
+			// Fallback: consultar DB
+			const userRoles = await this.authService.getUserRolesWithPermissions(
+				req.user.id
+			);
+			permissions = Array.from(
+				new Set(
+					userRoles.flatMap(ur =>
+						ur.role.rolePermissions.map(rp => rp.permission.identifier)
+					)
+				)
+			);
+		}
+
+		return res.code(HttpStatus.OK).send({
+			statusCode: 200,
+			data: { permissions },
+		});
+	}
+
 	@Post('refresh')
-	async refresh(@Res() res: FastifyReply, @Body() refreshDto: RefreshZodDto) {
-		const data = await this.authService.refreshSession(refreshDto.refresh);
+	@UseGuards(CsrfGuard)
+	async refresh(@Res() res: FastifyReply, @Req() req: AppRequest) {
+		const refreshToken = req.cookies?.refreshToken;
+
+		if (!refreshToken) {
+			return res.code(HttpStatus.UNAUTHORIZED).send({
+				statusCode: 401,
+				message: 'Refresh Failure',
+			});
+		}
+
+		const data = await this.authService.refreshSession(refreshToken);
 		if (data) {
+			// Set new HttpOnly cookies
+			const accessCookie = `accessToken=${data.session.accessToken}; Path=/; HttpOnly; Secure=${process.env.NODE_ENV === 'production'}; SameSite=Strict; Max-Age=900`;
+			const refreshCookie = `refreshToken=${data.session.refreshToken}; Path=/api/v1/auth/refresh; HttpOnly; Secure=${process.env.NODE_ENV === 'production'}; SameSite=Strict; Max-Age=${7 * 24 * 60 * 60}`;
+
+			res.header('Set-Cookie', [accessCookie, refreshCookie]);
+
 			return res.code(HttpStatus.OK).send({
 				statusCode: 200,
-				data: {
-					access: data.session.accessToken,
-					refresh: data.session.refreshToken,
-					user: this.userMapper.omitDefault(data.user),
-				},
+				success: true,
 				message: 'Refresh session successfully',
 			});
 		}
@@ -100,19 +154,25 @@ export class AuthController {
 		});
 	}
 
-	@Get('logout')
-	@Auth(Object.values(AuthRole))
-	async logout(
-		@Res() res: FastifyReply,
-		@Headers('Authorization') headers: string
-	) {
-		const accessToken = headers.split(' ')[1];
+	@Post('logout')
+	@UseGuards(JwtAuthGuard, CsrfGuard)
+	async logout(@Res() res: FastifyReply, @Req() req: AppRequest) {
+		const accessToken = req.cookies?.accessToken;
 		const result = await this.authService.closeSession(accessToken);
-		if (result)
+
+		if (result) {
+			// Clear cookies
+			res.header('Set-Cookie', [
+				'accessToken=; Path=/; HttpOnly; Max-Age=0',
+				'refreshToken=; Path=/api/v1/auth/refresh; HttpOnly; Max-Age=0',
+			]);
+
 			return res.code(HttpStatus.OK).send({
 				statusCode: 200,
+				success: true,
 				message: 'Logout Success',
 			});
+		}
 
 		return res.code(HttpStatus.FORBIDDEN).send({
 			statusCode: 403,
@@ -121,7 +181,7 @@ export class AuthController {
 	}
 
 	@Post('update-password')
-	@Auth(Object.values(AuthRole))
+	@UseGuards(JwtAuthGuard)
 	async updatePassword(
 		@Res() res: FastifyReply,
 		@Body() updatePasswordDto: UpdatePasswordZodDto,
@@ -161,7 +221,8 @@ export class AuthController {
 	}
 
 	@Post('verify-token')
-	async verifyToken(@Res() res: FastifyReply, @Body() { token }: TokenZodDto) {
+	async verifyToken(@Res() res: FastifyReply, @Body() body: TokenZodDto) {
+		const { token } = body;
 		const status = await this.authService.decodeVerificationToken(token);
 		if (status)
 			return res.code(HttpStatus.OK).send({

@@ -1,13 +1,12 @@
-import { AuthModule } from '@app/modules/auth';
+import { AuthModule } from '@app/modules/auth/auth.module';
 import { SettingsController } from '@app/modules/settings/settings.controller';
 import { SettingsService } from '@app/modules/settings/settings.service';
-import { Module, forwardRef } from '@nestjs/common';
-import { PrismaModule } from 'nestjs-prisma';
+import { forwardRef, Module } from '@nestjs/common';
 
 @Module({
 	providers: [SettingsService],
 	controllers: [SettingsController],
-	imports: [PrismaModule, forwardRef(() => AuthModule)],
+	imports: [forwardRef(() => AuthModule)],
 	exports: [SettingsService],
 })
 export class SettingsModule {}

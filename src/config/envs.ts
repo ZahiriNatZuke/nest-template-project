@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import process from 'node:process';
-import { z } from 'nestjs-zod/z';
+import { z } from 'zod';
 
 const envsSchema = z.object({
 	ENVIRONMENT: z.string().default('development'),

@@ -1,43 +1,14 @@
-import { createZodDto } from 'nestjs-zod';
-import { z } from 'nestjs-zod/z';
+import { createZodDto } from '@app/core/utils/zod';
+import { z } from 'zod';
 
 export const RecoveryAccountSchema = z.object({
 	email: z.string().email(),
 	newPassword: z
-		.password()
-		.min(8, 'New Password must be at least 8 characters long')
-		.atLeastOne(
-			'lowercase',
-			'New Password must contain at least one lowercase letter'
-		)
-		.atLeastOne(
-			'uppercase',
-			'New Password must contain at least one uppercase letter'
-		)
-		.atLeastOne('digit', 'New Password must contain at least one number')
-		.atLeastOne(
-			'special',
-			'New Password must contain at least one special character'
-		),
+		.string()
+		.min(8, 'New Password must be at least 8 characters long'),
 	confirmNewPassword: z
-		.password()
-		.min(8, 'Confirm New Password must be at least 8 characters long')
-		.atLeastOne(
-			'lowercase',
-			'Confirm New Password must contain at least one lowercase letter'
-		)
-		.atLeastOne(
-			'uppercase',
-			'Confirm New Password must contain at least one uppercase letter'
-		)
-		.atLeastOne(
-			'digit',
-			'Confirm New Password must contain at least one number'
-		)
-		.atLeastOne(
-			'special',
-			'Confirm New Password must contain at least one special character'
-		),
+		.string()
+		.min(8, 'Confirm New Password must be at least 8 characters long'),
 });
 
 export class RecoveryAccountZodDto extends createZodDto(

@@ -1,26 +1,28 @@
-import { TasksService } from '@app/core/services';
+import { ApiKeyValidationMiddleware } from '@app/core/middlewares/api-key-validation.middleware';
+import { AuditModule } from '@app/core/services/audit/audit.module';
+import { CsrfModule } from '@app/core/services/csrf/csrf.module';
+import { PrismaModule } from '@app/core/services/prisma/prisma.module';
+import { TasksService } from '@app/core/services/tasks/tasks.service';
+import { TokenCleanupService } from '@app/core/services/tasks/token-cleanup.service';
 import { envs } from '@app/env';
-import { ApiKeyModule } from '@app/modules/api-key';
-import { AuthModule } from '@app/modules/auth';
-import { RoleModule } from '@app/modules/role';
-import { SessionModule } from '@app/modules/session';
-import { SettingsModule } from '@app/modules/settings';
-import { UserModule } from '@app/modules/user';
-import { HttpStatus, Logger, Module } from '@nestjs/common';
+import { ApiKeyModule } from '@app/modules/api-key/api-key.module';
+import { AuthModule } from '@app/modules/auth/auth.module';
+import { PermissionModule } from '@app/modules/permission/permission.module';
+import { RoleModule } from '@app/modules/role/role.module';
+import { SessionModule } from '@app/modules/session/session.module';
+import { SettingsModule } from '@app/modules/settings/settings.module';
+import { UserModule } from '@app/modules/user/user.module';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
 import { LoggerModule } from 'nestjs-pino';
-import {
-	PrismaModule,
-	QueryInfo,
-	loggingMiddleware,
-	providePrismaClientExceptionFilter,
-} from 'nestjs-prisma';
 import { createStream } from 'rotating-file-stream';
 
 @Module({
 	imports: [
-		ScheduleModule.forRoot(),
 		PrismaModule,
+		AuditModule,
+		CsrfModule,
+		ScheduleModule.forRoot(),
 		LoggerModule.forRoot({
 			pinoHttp: [
 				{
@@ -83,44 +85,19 @@ import { createStream } from 'rotating-file-stream';
 				),
 			],
 		}),
-		PrismaModule.forRoot({
-			isGlobal: true,
-			prismaServiceOptions: {
-				prismaOptions: {
-					log: [
-						{ emit: 'stdout', level: 'query' },
-						{ emit: 'stdout', level: 'info' },
-						{ emit: 'stdout', level: 'warn' },
-						{ emit: 'stdout', level: 'error' },
-					],
-				},
-				middlewares: [
-					loggingMiddleware({
-						logger: new Logger('PrismaMiddleware'),
-						logLevel: 'log', // default is `debug`
-						logMessage: (query: QueryInfo) =>
-							`[Prisma Query] ${query.model}.${query.action} - ${query.executionTime}ms`,
-					}),
-				],
-			},
-		}),
 		AuthModule,
 		UserModule,
 		SettingsModule,
 		RoleModule,
+		PermissionModule,
 		SessionModule,
 		ApiKeyModule,
 	],
-	providers: [
-		TasksService,
-		providePrismaClientExceptionFilter({
-			// Prisma Error Code: HTTP Status Response
-			P2000: HttpStatus.BAD_REQUEST,
-			P2001: HttpStatus.NOT_FOUND,
-			P2002: HttpStatus.CONFLICT,
-			P2003: HttpStatus.BAD_REQUEST,
-			P2025: HttpStatus.NOT_FOUND,
-		}),
-	],
+	providers: [TasksService, TokenCleanupService],
+	exports: [],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+	configure(consumer: MiddlewareConsumer) {
+		consumer.apply(ApiKeyValidationMiddleware).forRoutes('api/v1/*');
+	}
+}

@@ -1,4 +1,4 @@
-import { SafeUser } from '@app/core/types';
+import { SafeUser } from '@app/core/types/app-request';
 import { Injectable } from '@nestjs/common';
 import { User } from '@prisma/client';
 import { omit } from 'lodash';

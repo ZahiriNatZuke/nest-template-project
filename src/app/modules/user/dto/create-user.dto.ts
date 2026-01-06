@@ -1,26 +1,14 @@
-import { createZodDto } from 'nestjs-zod';
-import { z } from 'nestjs-zod/z';
+import { createZodDto } from '@app/core/utils/zod';
+import { z } from 'zod';
 
 export const CreateUserSchema = z.object({
 	username: z.string(),
 	email: z.string().email(),
 	fullName: z.string(),
 	password: z
-		.password()
-		.min(8, 'Password must be at least 8 characters long')
-		.atLeastOne(
-			'lowercase',
-			'Password must contain at least one lowercase letter'
-		)
-		.atLeastOne(
-			'uppercase',
-			'Password must contain at least one uppercase letter'
-		)
-		.atLeastOne('digit', 'Password must contain at least one number')
-		.atLeastOne(
-			'special',
-			'Password must contain at least one special character'
-		),
+		.string()
+		.min(8)
+		.min(8, 'Password must be at least 8 characters long'),
 });
 
 export class CreateUserZodDto extends createZodDto(CreateUserSchema) {}

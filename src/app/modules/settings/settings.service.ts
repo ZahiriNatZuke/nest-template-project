@@ -1,13 +1,11 @@
-import {
-	CreateSettingsZodDto,
-	UpdateManySettingsZodDto,
-	UpdateSettingsZodDto,
-} from '@app/modules/settings/dto';
+import { PrismaService } from '@app/core/services/prisma/prisma.service';
+import { ZodValidationException } from '@app/core/utils/zod';
+import { CreateSettingsZodDto } from '@app/modules/settings/dto/create-settings.dto';
+import { UpdateManySettingsZodDto } from '@app/modules/settings/dto/update-many-settings.dto';
+import { UpdateSettingsZodDto } from '@app/modules/settings/dto/update-settings.dto';
 import { Injectable } from '@nestjs/common';
 import { Prisma, Settings } from '@prisma/client';
-import { PrismaService } from 'nestjs-prisma';
-import { ZodValidationException } from 'nestjs-zod';
-import { z } from 'nestjs-zod/z';
+import { z } from 'zod';
 
 @Injectable()
 export class SettingsService {
@@ -45,9 +43,9 @@ export class SettingsService {
 					key: data.key,
 				},
 			});
-		} catch (e) {
+		} catch (_e) {
 			throw new ZodValidationException(
-				z.ZodError.create([
+				new z.ZodError([
 					{
 						code: 'custom',
 						path: [],
@@ -82,5 +80,18 @@ export class SettingsService {
 				OR: data.map(e => ({ key: e.key })),
 			},
 		});
+	}
+
+	async delete(where: Prisma.SettingsWhereUniqueInput): Promise<boolean> {
+		try {
+			await this.prisma.settings.delete({ where });
+			return true;
+		} catch (_e) {
+			throw new ZodValidationException(
+				new z.ZodError([
+					{ code: 'custom', path: [], message: 'Delete setting failure' },
+				])
+			);
+		}
 	}
 }

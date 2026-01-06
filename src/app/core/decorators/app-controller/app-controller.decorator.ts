@@ -1,7 +1,6 @@
 import { envs } from '@app/env';
-import { ApiKeyAuthGuard } from '@app/modules/auth/guards';
-import { Controller, UseGuards, applyDecorators } from '@nestjs/common';
-import { ApiSecurity, ApiTags } from '@nestjs/swagger';
+import { applyDecorators, Controller } from '@nestjs/common';
+import { ApiBearerAuth, ApiSecurity, ApiTags } from '@nestjs/swagger';
 
 export function AppController(route: string) {
 	const apiTag = route
@@ -10,8 +9,8 @@ export function AppController(route: string) {
 		.join(' ');
 	return applyDecorators(
 		Controller(route),
-		UseGuards(ApiKeyAuthGuard),
 		ApiTags(apiTag),
+		ApiBearerAuth('Authorization'),
 		ApiSecurity(envs.HEADER_KEY_API_KEY)
 	);
 }

@@ -1,7 +1,12 @@
 import { User } from '@prisma/client';
 import { FastifyRequest } from 'fastify';
 
-export type AppRequest = FastifyRequest & { user: ValidatedUser };
+export type AppRequest = FastifyRequest & {
+	user: ValidatedUser;
+	cookies: Record<string, string>;
+	apiKey: ApiKey;
+};
+
 export type ValidatedUser =
 	| {
 			user: SafeUser;
@@ -22,3 +27,9 @@ export type SafeUser = Omit<
 >;
 
 export type AuthRequest = FastifyRequest & { user: User };
+
+export type ApiKey = {
+	id: string;
+	keyHash: string;
+	application: string;
+} | null;

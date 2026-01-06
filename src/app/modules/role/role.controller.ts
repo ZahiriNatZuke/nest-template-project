@@ -1,3 +1,11 @@
+import { AppController } from '@app/core/decorators/app-controller/app-controller.decorator';
+import { ZodValidationException } from '@app/core/utils/zod';
+import { Authz } from '@app/modules/auth/decorators/authz.decorator';
+import { AssignPermissionZodDto } from '@app/modules/role/dto/assign-permission.dto';
+import { CreateRoleZodDto } from '@app/modules/role/dto/create-role.dto';
+import { UpdateRoleZodDto } from '@app/modules/role/dto/update-role.dto';
+import { FindRoleByIdPipe } from '@app/modules/role/pipes/find-role-by-id.pipe';
+import { RoleService } from '@app/modules/role/role.service';
 import {
 	Body,
 	Delete,
@@ -8,27 +16,18 @@ import {
 	Post,
 	Res,
 } from '@nestjs/common';
-
 import { ApiParam } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
-import { isNil, omitBy } from 'lodash';
-
-import { AppController } from '@app/core/decorators';
-import { Auth } from '@app/modules/auth/decorators';
-import { AuthRole } from '@app/modules/auth/enums';
-import { CreateRoleZodDto, UpdateRoleZodDto } from '@app/modules/role/dto';
-import { FindRoleByIdPipe } from '@app/modules/role/pipes';
-import { RoleService } from '@app/modules/role/role.service';
 import { FastifyReply } from 'fastify';
-import { ZodValidationException } from 'nestjs-zod';
-import { z } from 'nestjs-zod/z';
+import { isNil, omitBy } from 'lodash';
+import { z } from 'zod';
 
 @AppController('role')
 export class RoleController {
 	constructor(private roleService: RoleService) {}
 
 	@Post()
-	@Auth([AuthRole.ROOT_ROLE, AuthRole.ADMIN_ROLE])
+	@Authz('roles:write')
 	async create(@Res() res: FastifyReply, @Body() payload: CreateRoleZodDto) {
 		const role = await this.roleService.create(payload);
 		return res.code(HttpStatus.CREATED).send({
@@ -39,7 +38,7 @@ export class RoleController {
 	}
 
 	@Get()
-	@Auth([AuthRole.ROOT_ROLE, AuthRole.ADMIN_ROLE])
+	@Authz('roles:read')
 	async findMany(@Res() res: FastifyReply) {
 		return res.code(HttpStatus.OK).send({
 			statusCode: 200,
@@ -49,7 +48,7 @@ export class RoleController {
 
 	@Get(':id')
 	@ApiParam({ name: 'id', type: 'string', required: true })
-	@Auth([AuthRole.ROOT_ROLE, AuthRole.ADMIN_ROLE])
+	@Authz('roles:read')
 	async findOne(
 		@Res() res: FastifyReply,
 		@Param('id', FindRoleByIdPipe) role: Role
@@ -61,7 +60,7 @@ export class RoleController {
 	}
 
 	@Patch(':id')
-	@Auth([AuthRole.ROOT_ROLE, AuthRole.ADMIN_ROLE])
+	@Authz('roles:write')
 	@ApiParam({ name: 'id', type: 'string', required: true })
 	async update(
 		@Res() res: FastifyReply,
@@ -80,7 +79,7 @@ export class RoleController {
 	}
 
 	@Delete(':id')
-	@Auth([AuthRole.ROOT_ROLE, AuthRole.ADMIN_ROLE])
+	@Authz('roles:delete')
 	@ApiParam({ name: 'id', type: 'string', required: true })
 	async delete(
 		@Res() res: FastifyReply,
@@ -88,7 +87,7 @@ export class RoleController {
 	) {
 		if (role.default) {
 			throw new ZodValidationException(
-				z.ZodError.create([
+				new z.ZodError([
 					{
 						code: 'custom',
 						path: [],
@@ -102,6 +101,42 @@ export class RoleController {
 			statusCode: 200,
 			data: roleDeleted,
 			message: 'Role deleted',
+		});
+	}
+
+	@Post(':id/permissions')
+	@Authz('roles:write')
+	@ApiParam({ name: 'id', type: String })
+	async assignPermission(
+		@Res() res: FastifyReply,
+		@Param('id') roleId: string,
+		@Body() payload: AssignPermissionZodDto
+	) {
+		const role = await this.roleService.assignPermission(
+			roleId,
+			payload.permissionId
+		);
+		return res.code(HttpStatus.OK).send({
+			statusCode: 200,
+			data: role,
+			message: 'Permission assigned to role',
+		});
+	}
+
+	@Delete(':id/permissions/:permissionId')
+	@Authz('roles:write')
+	@ApiParam({ name: 'id', type: String })
+	@ApiParam({ name: 'permissionId', type: String })
+	async removePermission(
+		@Res() res: FastifyReply,
+		@Param('id') roleId: string,
+		@Param('permissionId') permissionId: string
+	) {
+		const role = await this.roleService.removePermission(roleId, permissionId);
+		return res.code(HttpStatus.OK).send({
+			statusCode: 200,
+			data: role,
+			message: 'Permission removed from role',
 		});
 	}
 }

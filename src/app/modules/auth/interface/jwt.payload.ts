@@ -3,4 +3,5 @@ export interface JWTPayload {
 	fullName: string;
 	email: string;
 	device: string;
+	perm?: string[]; // cached permissions identifiers
 }

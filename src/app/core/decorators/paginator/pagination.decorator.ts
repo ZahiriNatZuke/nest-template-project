@@ -1,14 +1,14 @@
-import { Pagination } from '@app/core/types';
+import { Pagination } from '@app/core/types/interfaces/pagination';
 import {
-	ExecutionContext,
 	applyDecorators,
 	createParamDecorator,
+	ExecutionContext,
 } from '@nestjs/common';
 import { ApiQuery } from '@nestjs/swagger';
 import { FastifyRequest } from 'fastify';
 
 export const PaginationDecorator = createParamDecorator(
-	(data, ctx: ExecutionContext): Pagination => {
+	(_data, ctx: ExecutionContext): Pagination => {
 		const req: FastifyRequest & { query: Pagination } = ctx
 			.switchToHttp()
 			.getRequest();
