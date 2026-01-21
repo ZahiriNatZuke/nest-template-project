@@ -1,3 +1,4 @@
+import { LoginAttemptService } from '@app/core/services/login-attempt/login-attempt.service';
 import { PrismaService } from '@app/core/services/prisma/prisma.service';
 import { SafeUser, ValidatedUser } from '@app/core/types/app-request';
 import { ZodValidationException } from '@app/core/utils/zod';
@@ -19,15 +20,31 @@ import { JWTPayload } from './interface/jwt.payload';
 
 @Injectable()
 export class AuthService {
+	private readonly logger = new Logger(AuthService.name);
+
 	constructor(
 		private prisma: PrismaService,
 		private jwtService: JwtService,
 		private userMapper: UserMapper,
-		private moduleRef: ModuleRef
+		private moduleRef: ModuleRef,
+		private loginAttemptService: LoginAttemptService
 	) {}
 
-	async validateUser(identifier: string, pass: string): Promise<ValidatedUser> {
+	async validateUser(
+		identifier: string,
+		pass: string,
+		ipAddress?: string,
+		userAgent?: string
+	): Promise<ValidatedUser> {
 		try {
+			// ✅ BRUTE FORCE PROTECTION: Validar que el usuario/IP no esté bloqueado
+			if (ipAddress && userAgent) {
+				await this.loginAttemptService.validateLoginAttempt(
+					identifier,
+					ipAddress
+				);
+			}
+
 			const user: User = await this.prisma.user.findFirstOrThrow({
 				where: {
 					OR: [{ email: identifier }, { username: identifier }],
@@ -35,13 +52,34 @@ export class AuthService {
 				take: 1,
 			});
 
-			if (user.confirmed && !user.blocked) {
+			const passwordMatch = await bcrypt.compare(pass, user.password ?? '');
+
+			if (user.confirmed && !user.blocked && passwordMatch) {
+				// ✅ Registrar intento exitoso
+				if (ipAddress && userAgent) {
+					await this.loginAttemptService.recordSuccessfulAttempt({
+						identifier,
+						ipAddress,
+						userAgent,
+					});
+				}
+
 				return {
-					status: await bcrypt.compare(pass, user.password ?? ''),
+					status: true,
 					user: this.userMapper.omitDefault(user),
 				};
 			}
-			if (!user.blocked) {
+
+			// ✅ Registrar intento fallido
+			if (ipAddress && userAgent) {
+				await this.loginAttemptService.recordFailedAttempt({
+					identifier,
+					ipAddress,
+					userAgent,
+				});
+			}
+
+			if (!user.blocked && !user.confirmed) {
 				return {
 					status: 'miss_activate',
 					user: this.userMapper.omitDefault(user),
@@ -52,7 +90,25 @@ export class AuthService {
 				user: null,
 				status: false,
 			};
-		} catch (_e) {
+		} catch (error) {
+			// Si es error de brute force o bloqueado, re-lanzar
+			if (error instanceof HttpException) {
+				throw error;
+			}
+
+			// Registrar intento fallido antes de lanzar excepción genérica
+			if (ipAddress && userAgent) {
+				try {
+					await this.loginAttemptService.recordFailedAttempt({
+						identifier,
+						ipAddress,
+						userAgent,
+					});
+				} catch (e) {
+					this.logger.error('Error recording failed attempt', e);
+				}
+			}
+
 			throw new HttpException(
 				{ message: 'Login Failure' },
 				HttpStatus.UNAUTHORIZED

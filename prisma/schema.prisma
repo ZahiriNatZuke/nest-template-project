@@ -157,3 +157,16 @@ model CsrfToken {
 
   @@index([token, expiresAt])
 }
+
+model LoginAttempt {
+  id         String   @id @default(uuid())
+  identifier String // email o username
+  ipAddress  String
+  userAgent  String?
+  success    Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([identifier, createdAt])
+  @@index([ipAddress, createdAt])
+  @@index([success, createdAt])
+}

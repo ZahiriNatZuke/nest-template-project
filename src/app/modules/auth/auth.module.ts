@@ -1,3 +1,4 @@
+import { LoginAttemptModule } from '@app/core/services/login-attempt/login-attempt.module';
 import { envs } from '@app/env';
 import { JwtStrategy } from '@app/modules/auth/strategies/jwt.strategy';
 import { LocalStrategy } from '@app/modules/auth/strategies/local.strategy';
@@ -20,6 +21,7 @@ import { VerifyJwtGuard } from './guards/verify-jwt.guard';
 	],
 	imports: [
 		UserModule,
+		LoginAttemptModule,
 		PassportModule,
 		JwtModule.register({
 			secret: envs.JWT_SECRET,

@@ -65,7 +65,8 @@
     "rotating-file-stream": "3.2.7",
     "rxjs": "7.8.2",
     "uuid": "13.0.0",
-    "zod": "4.3.5"
+    "zod": "4.3.5",
+    "zxcvbn": "^4.4.2"
   },
   "devDependencies": {
     "@biomejs/biome": "2.3.11",
@@ -81,6 +82,7 @@
     "@types/passport-jwt": "4.0.1",
     "@types/passport-local": "1.0.38",
     "@types/supertest": "6.0.3",
+    "@types/zxcvbn": "^4.4.5",
     "husky": "9.1.7",
     "jest": "30.2.0",
     "prisma": "7.2.0",

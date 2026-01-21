@@ -1,3 +1,4 @@
+import { LoginAttemptService } from '@app/core/services/login-attempt/login-attempt.service';
 import { PrismaService } from '@app/core/services/prisma/prisma.service';
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
@@ -6,7 +7,10 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 export class TokenCleanupService {
 	private readonly logger = new Logger(TokenCleanupService.name);
 
-	constructor(private prisma: PrismaService) {}
+	constructor(
+		private prisma: PrismaService,
+		private loginAttemptService: LoginAttemptService
+	) {}
 
 	@Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
 	async cleanupExpiredTokens() {
@@ -38,5 +42,13 @@ export class TokenCleanupService {
 		});
 
 		this.logger.log(`Cleaned up ${result.count} expired CSRF tokens`);
+	}
+
+	@Cron(CronExpression.EVERY_HOUR)
+	async cleanupOldLoginAttempts() {
+		this.logger.log('Running cleanup of old login attempts');
+
+		const count = await this.loginAttemptService.cleanupOldAttempts();
+		this.logger.log(`Cleaned up ${count} old login attempts`);
 	}
 }
