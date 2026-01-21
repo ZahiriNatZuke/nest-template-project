@@ -91,6 +91,8 @@ model Session {
   accessToken  String   @unique
   refreshToken String   @unique
   device       String
+  ipAddress    String? // IP address from first login
+  userAgent    String? // User-Agent from first login
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   userId       String

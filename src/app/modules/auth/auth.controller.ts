@@ -1,6 +1,7 @@
 import { AppController } from '@app/core/decorators/app-controller/app-controller.decorator';
 import { CsrfService } from '@app/core/services/csrf/csrf.service';
 import { AppRequest, AuthRequest } from '@app/core/types/app-request';
+import { extractRequestInfo } from '@app/core/utils/request-info';
 import { LoginZodDto } from '@app/modules/auth/dto/login.dto';
 import { RecoveryAccountZodDto } from '@app/modules/auth/dto/recovery-account.dto';
 import { RequestRecoveryAccountZodDto } from '@app/modules/auth/dto/request-recovery-account.dto';
@@ -53,9 +54,11 @@ export class AuthController {
 	async login(
 		@Res() res: FastifyReply,
 		@Body() loginDTO: LoginZodDto,
-		@Req() { user: validatedUser }: AppRequest
+		@Req() request: AppRequest
 	) {
 		const { device, rememberMe } = loginDTO;
+		const { user: validatedUser } = request;
+
 		if (!validatedUser.status || validatedUser.status === 'miss_activate') {
 			throw new HttpException(
 				{ message: 'Login Failure' },
@@ -63,9 +66,14 @@ export class AuthController {
 			);
 		}
 
+		// Extraer IP y User-Agent del request
+		const { ipAddress, userAgent } = extractRequestInfo(request);
+
 		const session = await this.authService.generateSession(
 			validatedUser.user,
-			device
+			device,
+			ipAddress,
+			userAgent
 		);
 
 		// Set HttpOnly cookies
@@ -133,7 +141,15 @@ export class AuthController {
 			});
 		}
 
-		const data = await this.authService.refreshSession(refreshToken);
+		// Extraer IP y User-Agent del request para validación
+		const { ipAddress, userAgent } = extractRequestInfo(req);
+
+		const data = await this.authService.refreshSession(
+			refreshToken,
+			ipAddress,
+			userAgent
+		);
+
 		if (data) {
 			// Set new HttpOnly cookies
 			const accessCookie = `accessToken=${data.session.accessToken}; Path=/; HttpOnly; Secure=${process.env.NODE_ENV === 'production'}; SameSite=Strict; Max-Age=900`;

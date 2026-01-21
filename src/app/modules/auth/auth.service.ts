@@ -60,7 +60,12 @@ export class AuthService {
 		}
 	}
 
-	async generateSession(user: SafeUser, device: string) {
+	async generateSession(
+		user: SafeUser,
+		device: string,
+		ipAddress?: string,
+		userAgent?: string
+	) {
 		// Resolver permisos del usuario
 		const userRoles = await this.prisma.userRole.findMany({
 			where: { userId: user.id },
@@ -106,7 +111,13 @@ export class AuthService {
 
 			return this.prisma.session.update({
 				where: { id: existing.id },
-				data: { accessToken, refreshToken },
+				data: {
+					accessToken,
+					refreshToken,
+					// Actualizar IP y User-Agent solo si se proporcionan
+					...(ipAddress && { ipAddress }),
+					...(userAgent && { userAgent }),
+				},
 			});
 		}
 
@@ -116,11 +127,17 @@ export class AuthService {
 				device,
 				accessToken,
 				refreshToken,
+				ipAddress,
+				userAgent,
 			},
 		});
 	}
 
-	async refreshSession(refreshToken: string) {
+	async refreshSession(
+		refreshToken: string,
+		requestIpAddress?: string,
+		requestUserAgent?: string
+	) {
 		try {
 			// Verificar que el token no esté en blacklist
 			const blacklisted = await this.isTokenBlacklisted(refreshToken);
@@ -138,6 +155,37 @@ export class AuthService {
 			const currentSession = await this.prisma.session.findUniqueOrThrow({
 				where: { refreshToken },
 			});
+
+			// Validar IP y User-Agent si están disponibles
+			if (
+				requestIpAddress &&
+				requestUserAgent &&
+				currentSession.ipAddress &&
+				currentSession.userAgent
+			) {
+				const { isSimilarIP, isSimilarUserAgent } = await import(
+					'@app/core/utils/request-info'
+				);
+
+				const ipMatch = isSimilarIP(currentSession.ipAddress, requestIpAddress);
+				const uaMatch = isSimilarUserAgent(
+					currentSession.userAgent,
+					requestUserAgent
+				);
+
+				if (!ipMatch || !uaMatch) {
+					// Posible session hijacking - invalidar sesión
+					Logger.warn(
+						`Refresh token validation failed for session ${currentSession.id}. ` +
+							`IP match: ${ipMatch}, UA match: ${uaMatch}`,
+						'AuthService'
+					);
+
+					// Invalidar esta sesión sospechosa
+					await this.closeSession(currentSession.accessToken);
+					return null;
+				}
+			}
 
 			const user = await this.prisma.user.findUniqueOrThrow({
 				where: { id: currentSession.userId },
