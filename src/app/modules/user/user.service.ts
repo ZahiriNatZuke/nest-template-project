@@ -1,4 +1,5 @@
 import { AuditService } from '@app/core/services/audit/audit.service';
+import { ChangeLogService } from '@app/core/services/audit/changelog.service';
 import { PrismaService } from '@app/core/services/prisma/prisma.service';
 import { ZodValidationException } from '@app/core/utils/zod';
 import { CreateUserZodDto } from '@app/modules/user/dto/create-user.dto';
@@ -23,7 +24,8 @@ export class UserService {
 	constructor(
 		private prisma: PrismaService,
 		private auditService: AuditService,
-		private moduleRef: ModuleRef
+		private moduleRef: ModuleRef,
+		private changeLogService: ChangeLogService
 	) {}
 
 	async findOne(
@@ -65,29 +67,61 @@ export class UserService {
 		data: UpdateUserZodDto;
 	}): Promise<User> {
 		const { where, data } = params;
+		const before = await this.prisma.user.findUniqueOrThrow({ where });
 		await this.prisma.user.update({
 			where,
 			data,
 		});
 
-		return this.prisma.user.findUniqueOrThrow({
+		const updated = await this.prisma.user.findUniqueOrThrow({
 			where: { ...where, deletedAt: null },
 			include: { userRoles: { include: { role: true } } },
 		});
+
+		await this.changeLogService.logChange({
+			userId: undefined,
+			action: 'user.update',
+			entityType: 'user',
+			entityId: updated.id,
+			before,
+			after: updated,
+		});
+
+		return updated;
 	}
 
 	async delete(where: Prisma.UserWhereUniqueInput): Promise<User> {
-		return this.prisma.user.update({
+		const before = await this.prisma.user.findUniqueOrThrow({ where });
+		const user = await this.prisma.user.update({
 			where,
 			data: { deletedAt: new Date() },
 		});
+		await this.changeLogService.logChange({
+			userId: undefined,
+			action: 'user.soft_delete',
+			entityType: 'user',
+			entityId: user.id,
+			before,
+			after: user,
+		});
+		return user;
 	}
 
 	async restore(where: Prisma.UserWhereUniqueInput): Promise<User> {
-		return this.prisma.user.update({
+		const before = await this.prisma.user.findUniqueOrThrow({ where });
+		const user = await this.prisma.user.update({
 			where,
 			data: { deletedAt: null },
 		});
+		await this.changeLogService.logChange({
+			userId: undefined,
+			action: 'user.restore',
+			entityType: 'user',
+			entityId: user.id,
+			before,
+			after: user,
+		});
+		return user;
 	}
 
 	private async createUser(payload: CreateUserZodDto) {

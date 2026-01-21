@@ -221,3 +221,17 @@ model LoginAttempt {
   @@index([ipAddress, createdAt])
   @@index([success, createdAt])
 }
+
+model AuditChangeLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  action     String
+  entityType String
+  entityId   String?
+  before     Json?
+  after      Json?
+  createdAt  DateTime @default(now())
+
+  @@index([userId, action, createdAt])
+  @@index([entityType, entityId])
+}

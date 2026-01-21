@@ -1,4 +1,6 @@
+import { AuditInterceptor } from '@app/core/interceptors/audit.interceptor';
 import { ApiKeyValidationMiddleware } from '@app/core/middlewares/api-key-validation.middleware';
+import { RequestContextMiddleware } from '@app/core/middlewares/request-context.middleware';
 import { AuditModule } from '@app/core/services/audit/audit.module';
 import { CsrfModule } from '@app/core/services/csrf/csrf.module';
 import { LoginAttemptModule } from '@app/core/services/login-attempt/login-attempt.module';
@@ -7,6 +9,7 @@ import { TasksService } from '@app/core/services/tasks/tasks.service';
 import { TokenCleanupService } from '@app/core/services/tasks/token-cleanup.service';
 import { envs } from '@app/env';
 import { ApiKeyModule } from '@app/modules/api-key/api-key.module';
+import { AuditLogModule } from '@app/modules/audit-log/audit-log.module';
 import { AuthModule } from '@app/modules/auth/auth.module';
 import { HealthModule } from '@app/modules/health/health.module';
 import { PermissionModule } from '@app/modules/permission/permission.module';
@@ -15,6 +18,7 @@ import { SessionModule } from '@app/modules/session/session.module';
 import { SettingsModule } from '@app/modules/settings/settings.module';
 import { UserModule } from '@app/modules/user/user.module';
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
 import { LoggerModule } from 'nestjs-pino';
 import { createStream } from 'rotating-file-stream';
@@ -96,12 +100,22 @@ import { createStream } from 'rotating-file-stream';
 		SessionModule,
 		ApiKeyModule,
 		HealthModule,
+		AuditLogModule,
 	],
-	providers: [TasksService, TokenCleanupService],
+	providers: [
+		TasksService,
+		TokenCleanupService,
+		{
+			provide: APP_INTERCEPTOR,
+			useClass: AuditInterceptor,
+		},
+	],
 	exports: [],
 })
 export class AppModule implements NestModule {
 	configure(consumer: MiddlewareConsumer) {
-		consumer.apply(ApiKeyValidationMiddleware).forRoutes('api/v1/*');
+		consumer
+			.apply(RequestContextMiddleware, ApiKeyValidationMiddleware)
+			.forRoutes('api/v1/*');
 	}
 }

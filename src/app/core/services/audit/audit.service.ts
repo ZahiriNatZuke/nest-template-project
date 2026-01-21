@@ -58,4 +58,25 @@ export class AuditService {
 			take,
 		});
 	}
+
+	async findManyPaged(params: {
+		userId?: string;
+		action?: string;
+		entityType?: string;
+		skip?: number;
+		take?: number;
+	}) {
+		const { userId, action, entityType, skip, take } = params;
+		return this.prisma.$transaction([
+			this.prisma.auditLog.count({
+				where: { userId, action, entityType },
+			}),
+			this.prisma.auditLog.findMany({
+				where: { userId, action, entityType },
+				orderBy: { createdAt: 'desc' },
+				skip,
+				take,
+			}),
+		]);
+	}
 }
