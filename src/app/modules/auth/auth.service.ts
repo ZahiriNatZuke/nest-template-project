@@ -177,6 +177,35 @@ export class AuthService {
 			});
 		}
 
+		// ✅ CONCURRENT SESSIONS LIMIT: Verificar límite antes de crear nueva sesión
+		const activeSessions = await this.prisma.session.count({
+			where: { userId: user.id },
+		});
+
+		if (activeSessions >= envs.MAX_CONCURRENT_SESSIONS) {
+			// Encontrar la sesión más antigua y eliminarla
+			const oldestSession = await this.prisma.session.findFirst({
+				where: { userId: user.id },
+				orderBy: { createdAt: 'asc' },
+			});
+
+			if (oldestSession) {
+				this.logger.warn(
+					`User ${user.id} reached max concurrent sessions (${envs.MAX_CONCURRENT_SESSIONS}). ` +
+						`Removing oldest session: ${oldestSession.device}`
+				);
+
+				// Blacklist tokens de la sesión más antigua
+				await this.blacklistToken(oldestSession.accessToken, 8);
+				await this.blacklistToken(oldestSession.refreshToken, 24);
+
+				// Eliminar sesión más antigua
+				await this.prisma.session.delete({
+					where: { id: oldestSession.id },
+				});
+			}
+		}
+
 		return this.prisma.session.create({
 			data: {
 				userId: user.id,

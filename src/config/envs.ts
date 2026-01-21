@@ -31,6 +31,7 @@ const envsSchema = z.object({
 	WEB_APP_API_KEY: z.string(),
 	MOBILE_APP_API_KEY: z.string(),
 	PINO_LOG_LEVEL: z.string(),
+	MAX_CONCURRENT_SESSIONS: z.coerce.number().default(5),
 });
 
 export const envs = envsSchema.parse(process.env);
