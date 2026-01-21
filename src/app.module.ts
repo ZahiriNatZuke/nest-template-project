@@ -1,12 +1,14 @@
 import { ApiKeyValidationMiddleware } from '@app/core/middlewares/api-key-validation.middleware';
 import { AuditModule } from '@app/core/services/audit/audit.module';
 import { CsrfModule } from '@app/core/services/csrf/csrf.module';
+import { LoginAttemptModule } from '@app/core/services/login-attempt/login-attempt.module';
 import { PrismaModule } from '@app/core/services/prisma/prisma.module';
 import { TasksService } from '@app/core/services/tasks/tasks.service';
 import { TokenCleanupService } from '@app/core/services/tasks/token-cleanup.service';
 import { envs } from '@app/env';
 import { ApiKeyModule } from '@app/modules/api-key/api-key.module';
 import { AuthModule } from '@app/modules/auth/auth.module';
+import { HealthModule } from '@app/modules/health/health.module';
 import { PermissionModule } from '@app/modules/permission/permission.module';
 import { RoleModule } from '@app/modules/role/role.module';
 import { SessionModule } from '@app/modules/session/session.module';
@@ -22,6 +24,7 @@ import { createStream } from 'rotating-file-stream';
 		PrismaModule,
 		AuditModule,
 		CsrfModule,
+		LoginAttemptModule,
 		ScheduleModule.forRoot(),
 		LoggerModule.forRoot({
 			pinoHttp: [
@@ -92,6 +95,7 @@ import { createStream } from 'rotating-file-stream';
 		PermissionModule,
 		SessionModule,
 		ApiKeyModule,
+		HealthModule,
 	],
 	providers: [TasksService, TokenCleanupService],
 	exports: [],
