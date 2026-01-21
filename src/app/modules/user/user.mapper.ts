@@ -8,7 +8,10 @@ export class UserMapper {
 	private defaultOmit: Array<keyof User> = [
 		'password',
 		'confirmationToken',
+		'confirmationTokenExpiresAt',
 		'resetPasswordToken',
+		'resetPasswordExpiresAt',
+		'deletedAt',
 	];
 
 	public omitDefault(user: User): SafeUser {

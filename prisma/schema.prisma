@@ -13,21 +13,32 @@ datasource db {
 }
 
 model User {
-  id                 String     @id @default(uuid())
-  username           String     @unique
-  email              String     @unique
-  fullName           String
-  password           String
-  resetPasswordToken String?
-  confirmationToken  String?
-  confirmed          Boolean    @default(false)
-  blocked            Boolean    @default(false)
-  createdAt          DateTime   @default(now())
-  updatedAt          DateTime   @updatedAt
-  sessions           Session[]
-  userRoles          UserRole[]
+  id                         String     @id @default(uuid())
+  username                   String     @unique
+  email                      String     @unique
+  fullName                   String
+  password                   String
+  resetPasswordToken         String?
+  resetPasswordExpiresAt     DateTime?
+  confirmationToken          String?
+  confirmationTokenExpiresAt DateTime?
+  confirmed                  Boolean    @default(false)
+  confirmedAt                DateTime?
+  blocked                    Boolean    @default(false)
+  deletedAt                  DateTime?
+  avatarUrl                  String?
+  phone                      String?
+  address                    String?
+  bio                        String?
+  createdAt                  DateTime   @default(now())
+  updatedAt                  DateTime   @updatedAt
+  sessions                   Session[]
+  userRoles                  UserRole[]
 
   @@index([id, email, username])
+  @@index([deletedAt])
+  @@index([confirmationToken])
+  @@index([resetPasswordToken])
 }
 
 model Role {

@@ -12,7 +12,7 @@ export class FindSettingByKeyPipe implements PipeTransform {
 	constructor(private settingsService: SettingsService) {}
 
 	async transform(value: string) {
-		const result = z.string().uuid('Invalid UUID').safeParse(value);
+		const result = z.uuid('Invalid UUID').safeParse(value);
 		if (!result.success)
 			throw new HttpException(
 				{

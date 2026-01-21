@@ -2,9 +2,12 @@ import { AppController } from '@app/core/decorators/app-controller/app-controlle
 import { CsrfService } from '@app/core/services/csrf/csrf.service';
 import { AppRequest, AuthRequest } from '@app/core/types/app-request';
 import { extractRequestInfo } from '@app/core/utils/request-info';
+import { ConfirmEmailZodDto } from '@app/modules/auth/dto/confirm-email.dto';
+import { ForgotPasswordZodDto } from '@app/modules/auth/dto/forgot-password.dto';
 import { LoginZodDto } from '@app/modules/auth/dto/login.dto';
 import { RecoveryAccountZodDto } from '@app/modules/auth/dto/recovery-account.dto';
 import { RequestRecoveryAccountZodDto } from '@app/modules/auth/dto/request-recovery-account.dto';
+import { ResetPasswordZodDto } from '@app/modules/auth/dto/reset-password.dto';
 import { TokenZodDto } from '@app/modules/auth/dto/token.dto';
 import { UpdatePasswordZodDto } from '@app/modules/auth/dto/update-password.dto';
 import { CsrfGuard } from '@app/modules/auth/guards/csrf.guard';
@@ -249,6 +252,43 @@ export class AuthController {
 		return res.code(HttpStatus.BAD_REQUEST).send({
 			statusCode: 400,
 			message: 'Verification process failure',
+		});
+	}
+
+	@Post('confirm-email')
+	async confirmEmail(
+		@Res() res: FastifyReply,
+		@Body() dto: ConfirmEmailZodDto
+	) {
+		await this.authService.confirmEmail(dto);
+		return res.code(HttpStatus.OK).send({
+			statusCode: 200,
+			message: 'Email confirmed successfully',
+		});
+	}
+
+	@Post('forgot-password')
+	async forgotPassword(
+		@Res() res: FastifyReply,
+		@Body() dto: ForgotPasswordZodDto
+	) {
+		await this.authService.forgotPassword(dto);
+		return res.code(HttpStatus.OK).send({
+			statusCode: 200,
+			message:
+				'Password reset process started. TODO: send email with reset link/token',
+		});
+	}
+
+	@Post('reset-password')
+	async resetPassword(
+		@Res() res: FastifyReply,
+		@Body() dto: ResetPasswordZodDto
+	) {
+		await this.authService.resetPassword(dto);
+		return res.code(HttpStatus.OK).send({
+			statusCode: 200,
+			message: 'Password reset successfully',
 		});
 	}
 }

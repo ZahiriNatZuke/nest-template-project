@@ -12,7 +12,7 @@ export class FindRoleByIdPipe implements PipeTransform {
 	constructor(private roleService: RoleService) {}
 
 	async transform(value: string) {
-		const result = z.string().uuid('Invalid UUID').safeParse(value);
+		const result = z.uuid('Invalid UUID').safeParse(value);
 		if (!result.success)
 			throw new HttpException(
 				{

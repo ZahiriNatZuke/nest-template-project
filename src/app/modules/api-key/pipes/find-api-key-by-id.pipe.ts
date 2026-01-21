@@ -12,7 +12,7 @@ export class FindApiKeyByIdPipe implements PipeTransform {
 	constructor(private apiKeyService: ApiKeyService) {}
 
 	async transform(value: string) {
-		const result = z.string().uuid('Invalid UUID').safeParse(value);
+		const result = z.uuid('Invalid UUID').safeParse(value);
 		if (!result.success)
 			throw new HttpException(
 				{

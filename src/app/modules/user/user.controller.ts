@@ -122,17 +122,24 @@ export class UserController {
 	}
 
 	@Delete(':id')
-	@Authz('users:delete')
-	@ApiParam({ name: 'id', type: 'string', required: true })
-	async delete(
-		@Res() res: FastifyReply,
-		@Param('id', FindUserByIdPipe) { id }: User
-	) {
-		const userDeleted = await this.userService.delete({ id });
+	@Authz('users:write')
+	async delete(@Res() res: FastifyReply, @Param() params: { id: string }) {
+		const user = await this.userService.delete({ id: params.id });
 		return res.code(HttpStatus.OK).send({
 			statusCode: 200,
-			data: userDeleted,
-			message: 'User deleted',
+			message: 'User deleted (soft)',
+			data: this.userMapper.omitDefault(user),
+		});
+	}
+
+	@Patch(':id/restore')
+	@Authz('users:write')
+	async restore(@Res() res: FastifyReply, @Param() params: { id: string }) {
+		const user = await this.userService.restore({ id: params.id });
+		return res.code(HttpStatus.OK).send({
+			statusCode: 200,
+			message: 'User restored',
+			data: this.userMapper.omitDefault(user),
 		});
 	}
 

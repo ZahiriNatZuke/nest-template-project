@@ -3,8 +3,11 @@ import { PrismaService } from '@app/core/services/prisma/prisma.service';
 import { SafeUser, ValidatedUser } from '@app/core/types/app-request';
 import { ZodValidationException } from '@app/core/utils/zod';
 import { envs } from '@app/env';
+import { ConfirmEmailZodDto } from '@app/modules/auth/dto/confirm-email.dto';
+import { ForgotPasswordZodDto } from '@app/modules/auth/dto/forgot-password.dto';
 import { RecoveryAccountDto } from '@app/modules/auth/dto/recovery-account.dto';
 import { RequestRecoveryAccountZodDto } from '@app/modules/auth/dto/request-recovery-account.dto';
+import { ResetPasswordZodDto } from '@app/modules/auth/dto/reset-password.dto';
 import { UpdatePasswordZodDto } from '@app/modules/auth/dto/update-password.dto';
 import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
@@ -47,6 +50,7 @@ export class AuthService {
 
 			const user: User = await this.prisma.user.findFirstOrThrow({
 				where: {
+					deletedAt: null,
 					OR: [{ email: identifier }, { username: identifier }],
 				},
 				take: 1,
@@ -514,6 +518,105 @@ export class AuthService {
 				])
 			);
 		}
+	}
+
+	async forgotPassword(dto: ForgotPasswordZodDto) {
+		const user = await this.prisma.user.findFirst({
+			where: { email: dto.email, deletedAt: null },
+		});
+		if (!user) {
+			throw new ZodValidationException(
+				new z.ZodError([
+					{ code: 'custom', path: [], message: 'User not found' },
+				])
+			);
+		}
+
+		const token = v4();
+		const expires = new Date(Date.now() + 15 * 60 * 1000); // 15m
+		await this.prisma.user.update({
+			where: { id: user.id },
+			data: {
+				resetPasswordToken: token,
+				resetPasswordExpiresAt: expires,
+			},
+		});
+
+		// TODO: send notification/email with reset link
+		this.logger.warn(
+			`TODO: send reset password email to ${user.email} with token ${token}`
+		);
+	}
+
+	async resetPassword(dto: ResetPasswordZodDto) {
+		const user = await this.prisma.user.findFirst({
+			where: {
+				email: dto.email,
+				resetPasswordToken: dto.token,
+				resetPasswordExpiresAt: { gt: new Date() },
+				deletedAt: null,
+			},
+		});
+
+		if (!user) {
+			throw new ZodValidationException(
+				new z.ZodError([
+					{
+						code: 'custom',
+						path: [],
+						message: 'Invalid or expired reset token',
+					},
+				])
+			);
+		}
+
+		const newPassword = await bcrypt.hash(
+			dto.newPassword,
+			bcrypt.genSaltSync(16)
+		);
+
+		await this.prisma.user.update({
+			where: { id: user.id },
+			data: {
+				password: newPassword,
+				resetPasswordToken: null,
+				resetPasswordExpiresAt: null,
+			},
+		});
+
+		await this.invalidateAllUserSessions(user.id);
+	}
+
+	async confirmEmail(dto: ConfirmEmailZodDto) {
+		const user = await this.prisma.user.findFirst({
+			where: {
+				confirmationToken: dto.token,
+				confirmationTokenExpiresAt: { gt: new Date() },
+				deletedAt: null,
+			},
+		});
+
+		if (!user) {
+			throw new ZodValidationException(
+				new z.ZodError([
+					{
+						code: 'custom',
+						path: [],
+						message: 'Invalid or expired confirmation token',
+					},
+				])
+			);
+		}
+
+		await this.prisma.user.update({
+			where: { id: user.id },
+			data: {
+				confirmed: true,
+				confirmedAt: new Date(),
+				confirmationToken: null,
+				confirmationTokenExpiresAt: null,
+			},
+		});
 	}
 
 	private async blacklistToken(token: string, expiresInHours: number) {

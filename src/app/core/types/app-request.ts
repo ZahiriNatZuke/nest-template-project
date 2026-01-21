@@ -28,7 +28,12 @@ export type ValidatedUser =
 
 export type SafeUser = Omit<
 	User,
-	'password' | 'resetPasswordToken' | 'confirmationToken'
+	| 'password'
+	| 'resetPasswordToken'
+	| 'resetPasswordExpiresAt'
+	| 'confirmationToken'
+	| 'confirmationTokenExpiresAt'
+	| 'deletedAt'
 >;
 
 export type AuthRequest = FastifyRequest & { user: User };

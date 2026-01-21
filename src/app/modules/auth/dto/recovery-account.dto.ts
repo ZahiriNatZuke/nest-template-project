@@ -2,7 +2,7 @@ import { createZodDto } from '@app/core/utils/zod';
 import { z } from 'zod';
 
 export const RecoveryAccountSchema = z.object({
-	email: z.string().email(),
+	email: z.email(),
 	newPassword: z
 		.string()
 		.min(8, 'New Password must be at least 8 characters long'),

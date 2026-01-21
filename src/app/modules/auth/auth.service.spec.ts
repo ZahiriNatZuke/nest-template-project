@@ -84,6 +84,11 @@ describe('AuthService', () => {
 			blocked: false,
 			createdAt: new Date(),
 			updatedAt: new Date(),
+			confirmedAt: new Date(),
+			avatarUrl: 'http://example.com/avatar.png',
+			phone: '1234567890',
+			address: '123 Test St',
+			bio: 'This is a test user.',
 		};
 
 		const mockUserRoles = [
