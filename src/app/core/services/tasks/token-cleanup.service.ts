@@ -23,4 +23,20 @@ export class TokenCleanupService {
 
 		this.logger.log(`Cleaned up ${result.count} expired tokens from blacklist`);
 	}
+
+	@Cron(CronExpression.EVERY_HOUR)
+	async cleanupExpiredCsrfTokens() {
+		this.logger.log('Running cleanup of expired CSRF tokens');
+
+		const now = new Date();
+		const result = await this.prisma.csrfToken.deleteMany({
+			where: {
+				expiresAt: {
+					lt: now,
+				},
+			},
+		});
+
+		this.logger.log(`Cleaned up ${result.count} expired CSRF tokens`);
+	}
 }

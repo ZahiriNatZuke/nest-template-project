@@ -1,43 +1,71 @@
 import { randomBytes } from 'node:crypto';
-import { Injectable } from '@nestjs/common';
+import { PrismaService } from '@app/core/services/prisma/prisma.service';
+import { Injectable, Logger } from '@nestjs/common';
 
 @Injectable()
 export class CsrfService {
-	private tokens = new Map<string, { token: string; expiresAt: number }>();
+	private readonly logger = new Logger(CsrfService.name);
 
-	generateToken(): string {
+	constructor(private readonly prisma: PrismaService) {}
+
+	async generateToken(): Promise<string> {
 		const token = randomBytes(32).toString('hex');
-		const expiresAt = Date.now() + 1000 * 60 * 60; // 1 hour
-		this.tokens.set(token, { token, expiresAt });
-		return token;
+		const expiresAt = new Date(Date.now() + 1000 * 60 * 60); // 1 hour
+
+		try {
+			await this.prisma.csrfToken.create({
+				data: {
+					token,
+					expiresAt,
+				},
+			});
+
+			this.logger.debug(`CSRF token generated: ${token.substring(0, 10)}...`);
+			return token;
+		} catch (error) {
+			this.logger.error('Error generating CSRF token', error);
+			throw error;
+		}
 	}
 
-	validateToken(token: string): boolean {
-		const entry = this.tokens.get(token);
-		if (!entry) return false;
-		if (entry.expiresAt < Date.now()) {
-			this.tokens.delete(token);
+	async validateToken(token: string): Promise<boolean> {
+		try {
+			const entry = await this.prisma.csrfToken.findUnique({
+				where: { token },
+			});
+
+			if (!entry) {
+				this.logger.warn(`CSRF token not found: ${token.substring(0, 10)}...`);
+				return false;
+			}
+
+			const now = new Date();
+			if (entry.expiresAt < now) {
+				// Token expired, delete it
+				await this.invalidateToken(token);
+				this.logger.warn(`CSRF token expired: ${token.substring(0, 10)}...`);
+				return false;
+			}
+
+			this.logger.debug(`CSRF token validated: ${token.substring(0, 10)}...`);
+			return true;
+		} catch (error) {
+			this.logger.error('Error validating CSRF token', error);
 			return false;
 		}
-		return true;
 	}
 
-	invalidateToken(token: string): void {
-		this.tokens.delete(token);
-	}
-
-	// Cleanup expired tokens every 10 minutes
-	constructor() {
-		setInterval(
-			() => {
-				const now = Date.now();
-				for (const [token, entry] of this.tokens.entries()) {
-					if (entry.expiresAt < now) {
-						this.tokens.delete(token);
-					}
-				}
-			},
-			10 * 60 * 1000
-		);
+	async invalidateToken(token: string): Promise<void> {
+		try {
+			await this.prisma.csrfToken.delete({
+				where: { token },
+			});
+			this.logger.debug(`CSRF token invalidated: ${token.substring(0, 10)}...`);
+		} catch {
+			// Token might not exist, that's okay
+			this.logger.debug(
+				`Could not invalidate CSRF token: ${token.substring(0, 10)}...`
+			);
+		}
 	}
 }

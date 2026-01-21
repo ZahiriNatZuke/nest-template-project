@@ -146,3 +146,12 @@ model AuditLog {
   @@index([userId, action, createdAt])
   @@index([entityType, entityId])
 }
+
+model CsrfToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([token, expiresAt])
+}
