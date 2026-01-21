@@ -5,6 +5,11 @@ export type AppRequest = FastifyRequest & {
 	user: ValidatedUser;
 	cookies: Record<string, string>;
 	apiKey: ApiKey;
+	resourceOwnership?: {
+		resourceType: string;
+		resourceId: string;
+		accessLevel: 'owner' | 'editor' | 'viewer';
+	};
 };
 
 export type ValidatedUser =

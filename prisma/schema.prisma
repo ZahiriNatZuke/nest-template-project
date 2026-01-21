@@ -38,10 +38,15 @@ model Role {
   default         Boolean          @default(false)
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
+  parentRoleId    String?
+  parentRole      Role?            @relation("RoleHierarchy", fields: [parentRoleId], references: [id], onDelete: SetNull)
+  childRoles      Role[]           @relation("RoleHierarchy")
   userRoles       UserRole[]
   rolePermissions RolePermission[]
+  policies        Policy[]
 
   @@index([id, identifier, name])
+  @@index([parentRoleId])
 }
 
 model Permission {
@@ -72,18 +77,53 @@ model UserRole {
   @@index([roleId])
 }
 
-// Junction table: Role ↔ Permission (many-to-many)
+// 2.4 - Extender RolePermission con expiración temporal
 model RolePermission {
   id           String     @id @default(uuid())
   roleId       String
   permissionId String
   createdAt    DateTime   @default(now())
+  expiresAt    DateTime? // NULL = nunca expira. Si tiene valor = permiso temporal
   role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
   permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
 
   @@unique([roleId, permissionId])
   @@index([roleId])
   @@index([permissionId])
+  @@index([expiresAt])
+}
+
+// 2.3 - ABAC: Políticas condicionales
+model Policy {
+  id          String   @id @default(uuid())
+  identifier  String   @unique // e.g., "can_edit_users_if_active"
+  description String?
+  roleId      String
+  role        Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  // Formato JSON: {field: "status", operator: "eq", value: "active"}
+  // Operadores: eq, ne, gt, gte, lt, lte, in, contains, startsWith
+  condition   Json // condiciones que deben cumplirse
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([roleId])
+  @@index([active])
+}
+
+// 2.2 - Resource-Level Authorization
+model ResourceOwnership {
+  id           String   @id @default(uuid())
+  userId       String
+  resourceType String // e.g., "user", "project", "document"
+  resourceId   String // ID del recurso específico
+  accessLevel  String   @default("owner") // "owner", "editor", "viewer"
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([userId, resourceType, resourceId])
+  @@index([userId, resourceType])
+  @@index([resourceType, resourceId])
 }
 
 model Session {

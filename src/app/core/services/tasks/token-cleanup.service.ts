@@ -51,4 +51,25 @@ export class TokenCleanupService {
 		const count = await this.loginAttemptService.cleanupOldAttempts();
 		this.logger.log(`Cleaned up ${count} old login attempts`);
 	}
+
+	@Cron(CronExpression.EVERY_HOUR)
+	async cleanupExpiredRolePermissions() {
+		this.logger.log(
+			'Running cleanup of expired role permissions (2.4 Temporary Permissions)'
+		);
+
+		const now = new Date();
+		const result = await this.prisma.rolePermission.deleteMany({
+			where: {
+				expiresAt: {
+					lt: now,
+					not: null,
+				},
+			},
+		});
+
+		if (result.count > 0) {
+			this.logger.log(`Cleaned up ${result.count} expired role permissions`);
+		}
+	}
 }

@@ -114,7 +114,7 @@ describe('Password Validation Utils', () => {
 		});
 
 		it('should handle special regex characters safely', () => {
-			const result = validatePasswordStrength('Pass.*+?^${}()|[]\\word1!');
+			const result = validatePasswordStrength('Pass.*+?^$\\{\\}()[]\\\\word1!');
 			// Should not crash or timeout
 			expect(result).toBeDefined();
 		});

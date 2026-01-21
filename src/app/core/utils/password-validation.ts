@@ -1,9 +1,17 @@
 import * as zxcvbnModule from 'zxcvbn';
 
+interface ZxcvbnResult {
+	score: number;
+	feedback: {
+		warning: string;
+		suggestions: string[];
+	};
+}
+
 // Manejar tanto ES6 como CommonJS exports
 const zxcvbn = (
 	typeof zxcvbnModule === 'function' ? zxcvbnModule : zxcvbnModule.default
-) as (password: string) => any;
+) as (password: string) => ZxcvbnResult;
 
 /**
  * Configuración de validación de contraseña
