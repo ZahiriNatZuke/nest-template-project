@@ -141,7 +141,28 @@ export class AuthController {
 			userAgent
 		);
 
-		// Set HttpOnly cookies
+		// ========== VALIDAR 2FA OBLIGATORIO ==========
+		// Si el usuario tiene 2FA marcado como requerido, debe verificarlo antes de acceder
+		if (
+			validatedUser.user.twoFactorRequired &&
+			validatedUser.user.twoFactorEnabled
+		) {
+			// Guardar sesión temporal en cookie con acceso limitado
+			const tempAccessCookie = `tempAccessToken=${session.accessToken}; Path=/; HttpOnly; Secure=${process.env.NODE_ENV === 'production'}; SameSite=Strict; Max-Age=600`;
+			const refreshCookie = `refreshToken=${session.refreshToken}; Path=/api/v1/auth/refresh; HttpOnly; Secure=${process.env.NODE_ENV === 'production'}; SameSite=Strict; Max-Age=600`;
+
+			res.header('Set-Cookie', [tempAccessCookie, refreshCookie]);
+
+			return res.code(HttpStatus.OK).send({
+				statusCode: 200,
+				requiresTwoFactor: true,
+				message:
+					'2FA verification required. Please verify with your authenticator app or backup code.',
+				sessionId: session.id,
+			});
+		}
+
+		// Set HttpOnly cookies normales si 2FA no es requerido
 		const accessCookie = `accessToken=${session.accessToken}; Path=/; HttpOnly; Secure=${process.env.NODE_ENV === 'production'}; SameSite=Strict; Max-Age=900`;
 		const refreshCookie = `refreshToken=${session.refreshToken}; Path=/api/v1/auth/refresh; HttpOnly; Secure=${process.env.NODE_ENV === 'production'}; SameSite=Strict; Max-Age=${rememberMe ? 7 * 24 * 60 * 60 : ''}`;
 
@@ -151,6 +172,7 @@ export class AuthController {
 			statusCode: 200,
 			user: validatedUser.user,
 			message: 'Login Success',
+			requiresTwoFactor: false,
 		});
 	}
 
@@ -730,6 +752,22 @@ export class AuthController {
 			);
 		}
 
+		// ========== 2FA VERIFICATION SUCCESS ==========
+		// Si 2FA es requerido y se verificó correctamente, completar login
+		if (user.twoFactorRequired) {
+			// El accessToken ya está en tempAccessToken, simplemente cambiarlo a accessToken
+			const accessCookie = `accessToken=${req.cookies?.tempAccessToken || req.cookies?.accessToken}; Path=/; HttpOnly; Secure=${process.env.NODE_ENV === 'production'}; SameSite=Strict; Max-Age=900`;
+
+			res.header('Set-Cookie', accessCookie);
+
+			return res.code(HttpStatus.OK).send({
+				statusCode: 200,
+				message: '2FA verification successful. Login completed.',
+				loginCompleted: true,
+			});
+		}
+
+		// Si 2FA no es requerido, solo confirmar verificación
 		return res.code(HttpStatus.OK).send({
 			statusCode: 200,
 			message: '2FA verification successful',
@@ -811,6 +849,75 @@ export class AuthController {
 			statusCode: 200,
 			data: { backupCodes },
 			message: 'Backup codes regenerated. Save them securely.',
+		});
+	}
+
+	@Post('2fa/require')
+	@UseGuards(JwtAuthGuard)
+	@ApiBearerAuth()
+	@ApiOperation({
+		summary: 'Mark 2FA as required',
+		description:
+			'Mark 2FA as mandatory for the user. User must have 2FA enabled first.',
+	})
+	@ApiResponse({
+		status: 200,
+		description: '2FA marked as required',
+	})
+	async require2FA(@Res() res: FastifyReply, @Req() req: AuthRequest) {
+		const user = await this.userService.findOne({ id: req.user.id }, true);
+
+		if (!user) {
+			throw new HttpException(
+				{ message: 'User not found' },
+				HttpStatus.NOT_FOUND
+			);
+		}
+
+		if (!user.twoFactorEnabled) {
+			throw new HttpException(
+				{
+					message: 'Cannot require 2FA if not enabled. Enable it first.',
+				},
+				HttpStatus.BAD_REQUEST
+			);
+		}
+
+		await this.twoFactorService.require2FA(user.id);
+
+		return res.code(HttpStatus.OK).send({
+			statusCode: 200,
+			message:
+				'2FA is now required for your account. You must verify it on every login.',
+		});
+	}
+
+	@Post('2fa/optional')
+	@UseGuards(JwtAuthGuard)
+	@ApiBearerAuth()
+	@ApiOperation({
+		summary: 'Mark 2FA as optional',
+		description: 'Mark 2FA as optional for the user.',
+	})
+	@ApiResponse({
+		status: 200,
+		description: '2FA marked as optional',
+	})
+	async make2FAOptional(@Res() res: FastifyReply, @Req() req: AuthRequest) {
+		const user = await this.userService.findOne({ id: req.user.id }, true);
+
+		if (!user) {
+			throw new HttpException(
+				{ message: 'User not found' },
+				HttpStatus.NOT_FOUND
+			);
+		}
+
+		await this.twoFactorService.make2FAOptional(user.id);
+
+		return res.code(HttpStatus.OK).send({
+			statusCode: 200,
+			message: '2FA is now optional for your account.',
 		});
 	}
 }

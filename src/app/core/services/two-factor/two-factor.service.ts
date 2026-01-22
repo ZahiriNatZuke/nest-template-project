@@ -73,8 +73,6 @@ export class TwoFactorService {
 		this.logger.log(`2FA enabled for user ${userId}`);
 	}
 
-	// ...existing code...
-
 	/**
 	 * Disable 2FA for a user
 	 */
@@ -91,7 +89,45 @@ export class TwoFactorService {
 		this.logger.log(`2FA disabled for user ${userId}`);
 	}
 
-	// ...existing code...
+	/**
+	 * Mark 2FA as required for a user
+	 */
+	async require2FA(userId: string): Promise<void> {
+		await this.prisma.user.update({
+			where: { id: userId },
+			data: {
+				twoFactorRequired: true,
+			},
+		});
+
+		this.logger.log(`2FA marked as required for user ${userId}`);
+	}
+
+	/**
+	 * Mark 2FA as optional for a user
+	 */
+	async make2FAOptional(userId: string): Promise<void> {
+		await this.prisma.user.update({
+			where: { id: userId },
+			data: {
+				twoFactorRequired: false,
+			},
+		});
+
+		this.logger.log(`2FA marked as optional for user ${userId}`);
+	}
+
+	/**
+	 * Check if 2FA is required for a user
+	 */
+	async is2FARequired(userId: string): Promise<boolean> {
+		const user = await this.prisma.user.findUnique({
+			where: { id: userId },
+			select: { twoFactorRequired: true },
+		});
+
+		return user?.twoFactorRequired ?? false;
+	}
 
 	/**
 	 * Generate backup codes

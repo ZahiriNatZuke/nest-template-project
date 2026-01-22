@@ -31,6 +31,7 @@ model User {
   address                    String?
   bio                        String?
   twoFactorEnabled           Boolean            @default(false)
+  twoFactorRequired          Boolean            @default(false) // Si es true, 2FA es obligatorio para login
   twoFactorSecret            String?
   twoFactorBackupCodes       Json? // Array of hashed backup codes
   createdAt                  DateTime           @default(now())
