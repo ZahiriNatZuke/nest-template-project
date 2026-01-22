@@ -1,4 +1,5 @@
 import { AppController } from '@app/core/decorators/app-controller.decorator';
+import { LogAudit } from '@app/core/decorators/log-audit.decorator';
 import {
 	ApiPaginationDecorator,
 	PaginationDecorator,
@@ -38,6 +39,7 @@ export class UserController {
 
 	@Post()
 	@Authz('users:write')
+	@LogAudit({ action: 'user.create', entityType: 'user' })
 	async create(@Res() res: FastifyReply, @Body() payload: CreateUserZodDto) {
 		const user = await this.userService.create(payload);
 		return res.code(HttpStatus.CREATED).send({
@@ -105,6 +107,7 @@ export class UserController {
 	@Patch(':id')
 	@Authz('users:write')
 	@ApiParam({ name: 'id', type: 'string', required: true })
+	@LogAudit({ action: 'user.update', entityType: 'user' })
 	async update(
 		@Res() res: FastifyReply,
 		@Param('id', FindUserByIdPipe) { id }: User,
@@ -123,6 +126,7 @@ export class UserController {
 
 	@Delete(':id')
 	@Authz('users:write')
+	@LogAudit({ action: 'user.delete', entityType: 'user' })
 	async delete(@Res() res: FastifyReply, @Param() params: { id: string }) {
 		const user = await this.userService.delete({ id: params.id });
 		return res.code(HttpStatus.OK).send({
@@ -134,6 +138,7 @@ export class UserController {
 
 	@Patch(':id/restore')
 	@Authz('users:write')
+	@LogAudit({ action: 'user.restore', entityType: 'user' })
 	async restore(@Res() res: FastifyReply, @Param() params: { id: string }) {
 		const user = await this.userService.restore({ id: params.id });
 		return res.code(HttpStatus.OK).send({
@@ -146,6 +151,7 @@ export class UserController {
 	@Post(':id/roles')
 	@Authz('users:write')
 	@ApiParam({ name: 'id', type: String })
+	@LogAudit({ action: 'user.assign_role', entityType: 'user', omitBody: true })
 	async assignRole(
 		@Res() res: FastifyReply,
 		@Param('id') userId: string,
@@ -163,6 +169,7 @@ export class UserController {
 	@Authz('users:write')
 	@ApiParam({ name: 'id', type: String })
 	@ApiParam({ name: 'roleId', type: String })
+	@LogAudit({ action: 'user.remove_role', entityType: 'user' })
 	async removeRole(
 		@Res() res: FastifyReply,
 		@Param('id') userId: string,

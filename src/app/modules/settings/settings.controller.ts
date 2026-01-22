@@ -1,4 +1,5 @@
 import { AppController } from '@app/core/decorators/app-controller.decorator';
+import { LogAudit } from '@app/core/decorators/log-audit.decorator';
 import { Authz } from '@app/modules/auth/decorators/authz.decorator';
 import { CreateSettingsZodDto } from '@app/modules/settings/dto/create-settings.dto';
 import { UpdateManySettingsZodDto } from '@app/modules/settings/dto/update-many-settings.dto';
@@ -25,6 +26,7 @@ export class SettingsController {
 
 	@Post()
 	@Authz('settings:write')
+	@LogAudit({ action: 'settings.create', entityType: 'settings' })
 	async create(
 		@Res() res: FastifyReply,
 		@Body() payload: CreateSettingsZodDto
@@ -62,6 +64,11 @@ export class SettingsController {
 	@Patch('/:key')
 	@Authz('settings:write')
 	@ApiParam({ name: 'key', type: 'string', required: true })
+	@LogAudit({
+		action: 'settings.update',
+		entityType: 'settings',
+		entityIdParam: 'key',
+	})
 	async update(
 		@Res() res: FastifyReply,
 		@Body() body: UpdateSettingsZodDto,
@@ -82,6 +89,7 @@ export class SettingsController {
 
 	@Patch()
 	@Authz('settings:write')
+	@LogAudit({ action: 'settings.update_many', entityType: 'settings' })
 	async updateMany(
 		@Res() res: FastifyReply,
 		@Body() data: UpdateManySettingsZodDto
@@ -98,6 +106,11 @@ export class SettingsController {
 	@Delete('/:key')
 	@Authz('settings:delete')
 	@ApiParam({ name: 'key', type: 'string', required: true })
+	@LogAudit({
+		action: 'settings.delete',
+		entityType: 'settings',
+		entityIdParam: 'key',
+	})
 	async remove(
 		@Res() res: FastifyReply,
 		@Param('key', FindSettingByKeyPipe) setting: Settings

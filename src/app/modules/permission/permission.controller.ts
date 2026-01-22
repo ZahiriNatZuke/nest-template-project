@@ -1,4 +1,5 @@
 import { AppController } from '@app/core/decorators/app-controller.decorator';
+import { LogAudit } from '@app/core/decorators/log-audit.decorator';
 import { Authz } from '@app/modules/auth/decorators/authz.decorator';
 import { CreatePermissionZodDto } from '@app/modules/permission/dto/create-permission.dto';
 import { UpdatePermissionZodDto } from '@app/modules/permission/dto/update-permission.dto';
@@ -23,6 +24,7 @@ export class PermissionController {
 
 	@Post()
 	@Authz('permissions:write')
+	@LogAudit({ action: 'permission.create', entityType: 'permission' })
 	async create(
 		@Res() res: FastifyReply,
 		@Body() payload: CreatePermissionZodDto
@@ -58,6 +60,7 @@ export class PermissionController {
 	@Patch(':id')
 	@Authz('permissions:write')
 	@ApiParam({ name: 'id', type: 'string', required: true })
+	@LogAudit({ action: 'permission.update', entityType: 'permission' })
 	async update(
 		@Res() res: FastifyReply,
 		@Param('id') id: string,
@@ -77,6 +80,7 @@ export class PermissionController {
 	@Delete(':id')
 	@Authz('permissions:delete')
 	@ApiParam({ name: 'id', type: 'string', required: true })
+	@LogAudit({ action: 'permission.delete', entityType: 'permission' })
 	async delete(@Res() res: FastifyReply, @Param('id') id: string) {
 		const permissionDeleted = await this.permissionService.delete({ id });
 		return res.code(HttpStatus.OK).send({

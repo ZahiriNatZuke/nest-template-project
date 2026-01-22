@@ -1,4 +1,5 @@
 import { AppController } from '@app/core/decorators/app-controller.decorator';
+import { LogAudit } from '@app/core/decorators/log-audit.decorator';
 import { ZodValidationException } from '@app/core/utils/zod';
 import { Authz } from '@app/modules/auth/decorators/authz.decorator';
 import { AssignPermissionZodDto } from '@app/modules/role/dto/assign-permission.dto';
@@ -28,6 +29,7 @@ export class RoleController {
 
 	@Post()
 	@Authz('roles:write')
+	@LogAudit({ action: 'role.create', entityType: 'role' })
 	async create(@Res() res: FastifyReply, @Body() payload: CreateRoleZodDto) {
 		const role = await this.roleService.create(payload);
 		return res.code(HttpStatus.CREATED).send({
@@ -62,6 +64,7 @@ export class RoleController {
 	@Patch(':id')
 	@Authz('roles:write')
 	@ApiParam({ name: 'id', type: 'string', required: true })
+	@LogAudit({ action: 'role.update', entityType: 'role' })
 	async update(
 		@Res() res: FastifyReply,
 		@Param('id', FindRoleByIdPipe) { id }: Role,
@@ -81,6 +84,7 @@ export class RoleController {
 	@Delete(':id')
 	@Authz('roles:delete')
 	@ApiParam({ name: 'id', type: 'string', required: true })
+	@LogAudit({ action: 'role.delete', entityType: 'role' })
 	async delete(
 		@Res() res: FastifyReply,
 		@Param('id', FindRoleByIdPipe) role: Role
@@ -107,6 +111,11 @@ export class RoleController {
 	@Post(':id/permissions')
 	@Authz('roles:write')
 	@ApiParam({ name: 'id', type: String })
+	@LogAudit({
+		action: 'role.assign_permission',
+		entityType: 'role',
+		omitBody: true,
+	})
 	async assignPermission(
 		@Res() res: FastifyReply,
 		@Param('id') roleId: string,
@@ -127,6 +136,7 @@ export class RoleController {
 	@Authz('roles:write')
 	@ApiParam({ name: 'id', type: String })
 	@ApiParam({ name: 'permissionId', type: String })
+	@LogAudit({ action: 'role.remove_permission', entityType: 'role' })
 	async removePermission(
 		@Res() res: FastifyReply,
 		@Param('id') roleId: string,
