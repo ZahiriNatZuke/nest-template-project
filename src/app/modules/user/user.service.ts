@@ -1,5 +1,5 @@
 import { AuditService } from '@app/core/services/audit/audit.service';
-import { ChangeLogService } from '@app/core/services/audit/changelog.service';
+import { ChangeLogService } from '@app/core/services/change-log/changelog.service';
 import { PrismaService } from '@app/core/services/prisma/prisma.service';
 import { ZodValidationException } from '@app/core/utils/zod';
 import { CreateUserZodDto } from '@app/modules/user/dto/create-user.dto';
