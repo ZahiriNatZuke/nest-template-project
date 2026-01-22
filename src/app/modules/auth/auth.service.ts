@@ -1,4 +1,5 @@
 import { LoginAttemptService } from '@app/core/services/login-attempt/login-attempt.service';
+import { NotificationService } from '@app/core/services/notification/notification.service';
 import { PrismaService } from '@app/core/services/prisma/prisma.service';
 import { SafeUser, ValidatedUser } from '@app/core/types/app-request';
 import { ZodValidationException } from '@app/core/utils/zod';
@@ -30,7 +31,8 @@ export class AuthService {
 		private jwtService: JwtService,
 		private userMapper: UserMapper,
 		private moduleRef: ModuleRef,
-		private loginAttemptService: LoginAttemptService
+		private loginAttemptService: LoginAttemptService,
+		_notificationService: NotificationService
 	) {}
 
 	async validateUser(
@@ -164,16 +166,22 @@ export class AuthService {
 			where: { userId_device: { userId: user.id, device } },
 		});
 
+		// ✅ SESSION FIXATION PROTECTION: Generar nuevo loginSessionId
+		const newLoginSessionId = v4();
+
 		if (existing) {
 			// Blacklist old tokens
 			await this.blacklistToken(existing.accessToken, 8);
 			await this.blacklistToken(existing.refreshToken, 24);
 
+			// Regenerate session ID y invalidar la sesión anterior
 			return this.prisma.session.update({
 				where: { id: existing.id },
 				data: {
 					accessToken,
 					refreshToken,
+					loginSessionId: newLoginSessionId,
+					lastActivityAt: new Date(),
 					// Actualizar IP y User-Agent solo si se proporcionan
 					...(ipAddress && { ipAddress }),
 					...(userAgent && { userAgent }),
@@ -216,6 +224,8 @@ export class AuthService {
 				device,
 				accessToken,
 				refreshToken,
+				loginSessionId: newLoginSessionId,
+				lastActivityAt: new Date(),
 				ipAddress,
 				userAgent,
 			},
@@ -320,6 +330,7 @@ export class AuthService {
 				data: {
 					accessToken: newAccessToken,
 					refreshToken: newRefreshToken,
+					lastActivityAt: new Date(),
 				},
 			});
 

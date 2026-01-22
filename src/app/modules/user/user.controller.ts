@@ -1,10 +1,10 @@
-import { AppController } from '@app/core/decorators/app-controller/app-controller.decorator';
+import { AppController } from '@app/core/decorators/app-controller.decorator';
 import {
 	ApiPaginationDecorator,
 	PaginationDecorator,
-} from '@app/core/decorators/paginator/pagination.decorator';
-import { TrimQuerySearchPipe } from '@app/core/pipes/trim-query-search/trim-query-search.pipe';
-import { Pagination } from '@app/core/types/interfaces/pagination';
+} from '@app/core/decorators/pagination.decorator';
+import { TrimQuerySearchPipe } from '@app/core/pipes/trim-query-search.pipe';
+import { Pagination } from '@app/core/types/pagination';
 import { generateMetadata } from '@app/core/utils/generate-metadata';
 import { Authz } from '@app/modules/auth/decorators/authz.decorator';
 import { AssignRoleZodDto } from '@app/modules/user/dto/assign-role.dto';

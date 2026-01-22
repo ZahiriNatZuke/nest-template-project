@@ -1,4 +1,5 @@
 import { LoginAttemptService } from '@app/core/services/login-attempt/login-attempt.service';
+import { NotificationService } from '@app/core/services/notification/notification.service';
 import { PrismaService } from '@app/core/services/prisma/prisma.service';
 import type { SafeUser } from '@app/core/types/app-request';
 import { ModuleRef } from '@nestjs/core';
@@ -7,6 +8,11 @@ import { Test, TestingModule } from '@nestjs/testing';
 import type { User } from '@prisma/client';
 import { UserMapper } from '../user/user.mapper';
 import { AuthService } from './auth.service';
+
+// Mock uuid module to avoid ESM issues
+jest.mock('uuid', () => ({
+	v4: jest.fn(() => 'mocked-uuid-v4'),
+}));
 
 describe('AuthService', () => {
 	let service: AuthService;
@@ -18,6 +24,7 @@ describe('AuthService', () => {
 		},
 		session: {
 			findUnique: jest.fn(),
+			findUniqueOrThrow: jest.fn(),
 			findFirst: jest.fn(),
 			findMany: jest.fn(),
 			count: jest.fn(),
@@ -37,6 +44,7 @@ describe('AuthService', () => {
 
 	const mockJwtService = {
 		sign: jest.fn(),
+		verify: jest.fn(),
 	};
 
 	const mockUserMapper = {
@@ -53,6 +61,14 @@ describe('AuthService', () => {
 		recordFailedAttempt: jest.fn(),
 	};
 
+	const mockNotificationService = {
+		notifyNewSession: jest.fn(),
+		notifySuspiciousLogin: jest.fn(),
+		notifyPasswordChange: jest.fn(),
+		notifyAccountLocked: jest.fn(),
+		notifySessionTerminated: jest.fn(),
+	};
+
 	beforeEach(async () => {
 		const module: TestingModule = await Test.createTestingModule({
 			providers: [
@@ -62,6 +78,7 @@ describe('AuthService', () => {
 				{ provide: UserMapper, useValue: mockUserMapper },
 				{ provide: ModuleRef, useValue: mockModuleRef },
 				{ provide: LoginAttemptService, useValue: mockLoginAttemptService },
+				{ provide: NotificationService, useValue: mockNotificationService },
 			],
 		}).compile();
 
@@ -328,6 +345,143 @@ describe('AuthService', () => {
 			expect(mockPrismaService.session.deleteMany).toHaveBeenCalledWith({
 				where: { userId },
 			});
+		});
+	});
+
+	describe('generateSession - Session Fixation Protection', () => {
+		const mockUser: SafeUser = {
+			id: 'user-1',
+			email: 'test@test.com',
+			username: 'testuser',
+			fullName: 'Test User',
+			confirmed: true,
+			blocked: false,
+			createdAt: new Date(),
+			updatedAt: new Date(),
+			confirmedAt: new Date(),
+			avatarUrl: 'http://example.com/avatar.png',
+			phone: '1234567890',
+			address: '123 Test St',
+			bio: 'This is a test user.',
+		};
+
+		it('should generate new loginSessionId on login', async () => {
+			const mockUserRoles = [
+				{
+					role: {
+						rolePermissions: [{ permission: { identifier: 'read:users' } }],
+					},
+				},
+			];
+
+			mockPrismaService.userRole.findMany.mockResolvedValue(mockUserRoles);
+			mockJwtService.sign.mockReturnValue('token');
+			mockPrismaService.session.findUnique.mockResolvedValue(null);
+			mockPrismaService.session.count.mockResolvedValue(0);
+			mockPrismaService.session.create.mockResolvedValue({
+				id: 'session-1',
+				loginSessionId: expect.any(String),
+				lastActivityAt: expect.any(Date),
+			});
+
+			await service.generateSession(mockUser, 'web');
+
+			// Verificar que se creó sesión con loginSessionId
+			expect(mockPrismaService.session.create).toHaveBeenCalledWith(
+				expect.objectContaining({
+					data: expect.objectContaining({
+						loginSessionId: expect.any(String),
+						lastActivityAt: expect.any(Date),
+					}),
+				})
+			);
+		});
+
+		it('should regenerate loginSessionId on session update (same device)', async () => {
+			const mockUserRoles = [
+				{
+					role: {
+						rolePermissions: [{ permission: { identifier: 'read:users' } }],
+					},
+				},
+			];
+
+			const existingSession = {
+				id: 'session-1',
+				loginSessionId: 'old-session-id',
+				accessToken: 'old-access',
+				refreshToken: 'old-refresh',
+			};
+
+			mockPrismaService.userRole.findMany.mockResolvedValue(mockUserRoles);
+			mockJwtService.sign.mockReturnValue('token');
+			mockPrismaService.session.findUnique.mockResolvedValue(existingSession);
+			mockPrismaService.tokenBlacklist.create.mockResolvedValue({});
+			mockPrismaService.session.update.mockResolvedValue({
+				id: 'session-1',
+				loginSessionId: 'new-session-id',
+				lastActivityAt: expect.any(Date),
+			});
+
+			await service.generateSession(mockUser, 'web');
+
+			// Verificar que se regeneró loginSessionId
+			expect(mockPrismaService.session.update).toHaveBeenCalledWith(
+				expect.objectContaining({
+					data: expect.objectContaining({
+						loginSessionId: expect.any(String),
+						lastActivityAt: expect.any(Date),
+					}),
+				})
+			);
+		});
+
+		it('should update lastActivityAt on token refresh', async () => {
+			const mockUserRoles = [
+				{
+					role: {
+						rolePermissions: [{ permission: { identifier: 'read:users' } }],
+					},
+				},
+			];
+
+			const currentSession = {
+				id: 'session-1',
+				loginSessionId: 'session-id',
+				userId: 'user-1',
+				device: 'web',
+				accessToken: 'old-access',
+				refreshToken: 'old-refresh',
+				ipAddress: '127.0.0.1',
+				userAgent: 'Mozilla/5.0',
+			};
+
+			mockPrismaService.session.findUniqueOrThrow.mockResolvedValue(
+				currentSession
+			);
+			mockPrismaService.tokenBlacklist.findUnique.mockResolvedValue(null);
+			mockPrismaService.user.findUniqueOrThrow.mockResolvedValue({
+				...mockUser,
+				userRoles: mockUserRoles,
+			});
+			mockPrismaService.userRole.findMany.mockResolvedValue(mockUserRoles);
+			mockJwtService.verify.mockResolvedValue({ userId: 'user-1' });
+			mockJwtService.sign.mockReturnValue('new-token');
+			mockPrismaService.session.update.mockResolvedValue({
+				...currentSession,
+				lastActivityAt: new Date(),
+			});
+
+			await service.refreshSession('old-refresh');
+
+			// Verificar que se actualizó lastActivityAt
+			expect(mockPrismaService.session.update).toHaveBeenCalledWith(
+				expect.objectContaining({
+					data: expect.objectContaining({
+						lastActivityAt: expect.any(Date),
+					}),
+				})
+			);
 		});
 	});
 });

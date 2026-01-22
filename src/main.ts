@@ -1,5 +1,5 @@
-import { HttpExceptionFilter } from '@app/core/filters/http-exception/http-exception.filter';
-import { ZodValidationExceptionFilter } from '@app/core/filters/zod-validation/zod-validation.filter';
+import { HttpExceptionFilter } from '@app/core/filters/http-exception.filter';
+import { ZodValidationExceptionFilter } from '@app/core/filters/zod-validation.filter';
 import { ZodValidationPipe } from '@app/core/pipes/zod-validation.pipe';
 import { envs } from '@app/env';
 import { Logger } from '@nestjs/common';

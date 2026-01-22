@@ -1,4 +1,4 @@
-import { AppController } from '@app/core/decorators/app-controller/app-controller.decorator';
+import { AppController } from '@app/core/decorators/app-controller.decorator';
 import { Authz } from '@app/modules/auth/decorators/authz.decorator';
 import { CreateSettingsZodDto } from '@app/modules/settings/dto/create-settings.dto';
 import { UpdateManySettingsZodDto } from '@app/modules/settings/dto/update-many-settings.dto';

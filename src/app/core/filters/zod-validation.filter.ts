@@ -1,6 +1,6 @@
 import { ArgumentsHost, Catch, ExceptionFilter } from '@nestjs/common';
 import { FastifyReply } from 'fastify';
-import { ZodValidationException } from '../../utils/zod';
+import { ZodValidationException } from '../utils/zod';
 
 @Catch(ZodValidationException)
 export class ZodValidationExceptionFilter implements ExceptionFilter {

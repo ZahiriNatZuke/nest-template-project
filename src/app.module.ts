@@ -1,10 +1,14 @@
+import { GlobalExceptionFilter } from '@app/core/filters/global-exception.filter';
 import { AuditInterceptor } from '@app/core/interceptors/audit.interceptor';
 import { ApiKeyValidationMiddleware } from '@app/core/middlewares/api-key-validation.middleware';
+import { CorrelationIdMiddleware } from '@app/core/middlewares/correlation-id.middleware';
 import { RequestContextMiddleware } from '@app/core/middlewares/request-context.middleware';
 import { AuditModule } from '@app/core/services/audit/audit.module';
 import { CsrfModule } from '@app/core/services/csrf/csrf.module';
 import { LoginAttemptModule } from '@app/core/services/login-attempt/login-attempt.module';
+import { NotificationModule } from '@app/core/services/notification/notification.module';
 import { PrismaModule } from '@app/core/services/prisma/prisma.module';
+import { SecurityAlertModule } from '@app/core/services/security-alert/security-alert.module';
 import { TasksService } from '@app/core/services/tasks/tasks.service';
 import { TokenCleanupService } from '@app/core/services/tasks/token-cleanup.service';
 import { envs } from '@app/env';
@@ -18,8 +22,9 @@ import { SessionModule } from '@app/modules/session/session.module';
 import { SettingsModule } from '@app/modules/settings/settings.module';
 import { UserModule } from '@app/modules/user/user.module';
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
-import { APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
 import { createStream } from 'rotating-file-stream';
 
@@ -29,7 +34,27 @@ import { createStream } from 'rotating-file-stream';
 		AuditModule,
 		CsrfModule,
 		LoginAttemptModule,
+		NotificationModule,
+		SecurityAlertModule,
 		ScheduleModule.forRoot(),
+		// Rate Limiting Configuration
+		ThrottlerModule.forRoot([
+			{
+				name: 'short',
+				ttl: 1000, // 1 second
+				limit: 3, // 3 requests per second
+			},
+			{
+				name: 'medium',
+				ttl: 10000, // 10 seconds
+				limit: 20, // 20 requests per 10 seconds
+			},
+			{
+				name: 'long',
+				ttl: 60000, // 1 minute
+				limit: 100, // 100 requests per minute
+			},
+		]),
 		LoggerModule.forRoot({
 			pinoHttp: [
 				{
@@ -109,13 +134,25 @@ import { createStream } from 'rotating-file-stream';
 			provide: APP_INTERCEPTOR,
 			useClass: AuditInterceptor,
 		},
+		{
+			provide: APP_GUARD,
+			useClass: ThrottlerGuard,
+		},
+		{
+			provide: APP_FILTER,
+			useClass: GlobalExceptionFilter,
+		},
 	],
 	exports: [],
 })
 export class AppModule implements NestModule {
 	configure(consumer: MiddlewareConsumer) {
 		consumer
-			.apply(RequestContextMiddleware, ApiKeyValidationMiddleware)
+			.apply(
+				CorrelationIdMiddleware,
+				RequestContextMiddleware,
+				ApiKeyValidationMiddleware
+			)
 			.forRoutes('api/v1/*');
 	}
 }

@@ -1,4 +1,4 @@
-import { AppController } from '@app/core/decorators/app-controller/app-controller.decorator';
+import { AppController } from '@app/core/decorators/app-controller.decorator';
 import { Authz } from '@app/modules/auth/decorators/authz.decorator';
 import { CreatePermissionZodDto } from '@app/modules/permission/dto/create-permission.dto';
 import { UpdatePermissionZodDto } from '@app/modules/permission/dto/update-permission.dto';

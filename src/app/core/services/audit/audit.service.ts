@@ -1,10 +1,16 @@
+import { EncryptionService } from '@app/core/services/encryption/encryption.service';
 import { PrismaService } from '@app/core/services/prisma/prisma.service';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class AuditService {
-	constructor(private prisma: PrismaService) {}
+	private readonly logger = new Logger(AuditService.name);
+
+	constructor(
+		private prisma: PrismaService,
+		private encryptionService: EncryptionService
+	) {}
 
 	async log(params: {
 		userId?: string;
@@ -14,6 +20,7 @@ export class AuditService {
 		metadata?: Record<string, string | number | boolean>;
 		ipAddress?: string;
 		userAgent?: string;
+		encryptMetadata?: boolean; // New parameter to control encryption
 	}) {
 		const {
 			userId,
@@ -23,7 +30,26 @@ export class AuditService {
 			metadata,
 			ipAddress,
 			userAgent,
+			encryptMetadata = false,
 		} = params;
+
+		// Encrypt metadata if requested and metadata exists
+		let finalMetadata: Prisma.InputJsonValue | undefined;
+		if (metadata) {
+			if (encryptMetadata) {
+				try {
+					const encryptedData =
+						await this.encryptionService.encryptObject(metadata);
+					finalMetadata = { encrypted: encryptedData } as Prisma.InputJsonValue;
+				} catch (error) {
+					this.logger.error('Failed to encrypt audit metadata', error);
+					// Fallback to unencrypted metadata
+					finalMetadata = metadata as Prisma.InputJsonValue;
+				}
+			} else {
+				finalMetadata = metadata as Prisma.InputJsonValue;
+			}
+		}
 
 		await this.prisma.auditLog.create({
 			data: {
@@ -31,7 +57,7 @@ export class AuditService {
 				action,
 				entityType,
 				entityId,
-				metadata: metadata ? (metadata as Prisma.InputJsonValue) : undefined,
+				metadata: finalMetadata,
 				ipAddress,
 				userAgent,
 			},
@@ -78,5 +104,37 @@ export class AuditService {
 				take,
 			}),
 		]);
+	}
+
+	/**
+	 * Decrypt metadata from an audit log entry
+	 * Returns the original metadata if it's not encrypted
+	 */
+	async decryptMetadata(
+		metadata: Prisma.JsonValue
+	): Promise<Record<string, unknown> | null> {
+		if (!metadata) {
+			return null;
+		}
+
+		// Check if metadata is encrypted
+		const metadataObj = metadata as Record<string, unknown>;
+		if (
+			typeof metadataObj === 'object' &&
+			'encrypted' in metadataObj &&
+			typeof metadataObj.encrypted === 'string'
+		) {
+			try {
+				return await this.encryptionService.decryptObject(
+					metadataObj.encrypted
+				);
+			} catch (error) {
+				this.logger.error('Failed to decrypt audit metadata', error);
+				return null;
+			}
+		}
+
+		// Return unencrypted metadata
+		return metadataObj;
 	}
 }

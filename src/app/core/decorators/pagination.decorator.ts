@@ -1,4 +1,4 @@
-import { Pagination } from '@app/core/types/interfaces/pagination';
+import { Pagination } from '@app/core/types/pagination';
 import {
 	applyDecorators,
 	createParamDecorator,

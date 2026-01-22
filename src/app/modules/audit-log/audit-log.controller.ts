@@ -1,11 +1,11 @@
-import { AppController } from '@app/core/decorators/app-controller/app-controller.decorator';
+import { AppController } from '@app/core/decorators/app-controller.decorator';
 import {
 	ApiPaginationDecorator,
 	PaginationDecorator,
-} from '@app/core/decorators/paginator/pagination.decorator';
-import { TrimQuerySearchPipe } from '@app/core/pipes/trim-query-search/trim-query-search.pipe';
+} from '@app/core/decorators/pagination.decorator';
+import { TrimQuerySearchPipe } from '@app/core/pipes/trim-query-search.pipe';
 import { AuditService } from '@app/core/services/audit/audit.service';
-import { Pagination } from '@app/core/types/interfaces/pagination';
+import { Pagination } from '@app/core/types/pagination';
 import { Authz } from '@app/modules/auth/decorators/authz.decorator';
 import { Get, HttpStatus, Query, Res } from '@nestjs/common';
 import { ApiQuery } from '@nestjs/swagger';

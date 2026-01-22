@@ -138,21 +138,25 @@ model ResourceOwnership {
 }
 
 model Session {
-  id           String   @id @default(uuid())
-  accessToken  String   @unique
-  refreshToken String   @unique
-  device       String
-  ipAddress    String? // IP address from first login
-  userAgent    String? // User-Agent from first login
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  userId       String
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id             String   @id @default(uuid())
+  loginSessionId String? // Regenerated on login (session fixation protection)
+  accessToken    String   @unique
+  refreshToken   String   @unique
+  device         String
+  ipAddress      String? // IP address from first login
+  userAgent      String? // User-Agent from first login
+  lastActivityAt DateTime @default(now()) // Updated on each request
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, device])
   @@index([id, userId, device])
   @@index([accessToken])
   @@index([refreshToken])
+  @@index([loginSessionId])
+  @@index([lastActivityAt])
 }
 
 model ApiKey {

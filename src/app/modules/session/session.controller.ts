@@ -1,4 +1,4 @@
-import { AppController } from '@app/core/decorators/app-controller/app-controller.decorator';
+import { AppController } from '@app/core/decorators/app-controller.decorator';
 import { Authz } from '@app/modules/auth/decorators/authz.decorator';
 import { FindSessionByIdPipe } from '@app/modules/session/pipes/find-session-by-id.pipe';
 import { SessionService } from '@app/modules/session/session.service';

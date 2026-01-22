@@ -1,4 +1,4 @@
-import { AppController } from '@app/core/decorators/app-controller/app-controller.decorator';
+import { AppController } from '@app/core/decorators/app-controller.decorator';
 import { ZodValidationException } from '@app/core/utils/zod';
 import { Authz } from '@app/modules/auth/decorators/authz.decorator';
 import { AssignPermissionZodDto } from '@app/modules/role/dto/assign-permission.dto';

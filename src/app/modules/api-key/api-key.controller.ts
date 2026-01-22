@@ -1,4 +1,4 @@
-import { AppController } from '@app/core/decorators/app-controller/app-controller.decorator';
+import { AppController } from '@app/core/decorators/app-controller.decorator';
 import { ZodValidationException } from '@app/core/utils/zod';
 import { CreateApiKeyZodDto } from '@app/modules/api-key/dto/create-api-key.dto';
 import { FindApiKeyByIdPipe } from '@app/modules/api-key/pipes/find-api-key-by-id.pipe';

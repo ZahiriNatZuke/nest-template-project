@@ -1,4 +1,9 @@
-import { AppController } from '@app/core/decorators/app-controller/app-controller.decorator';
+import { AppController } from '@app/core/decorators/app-controller.decorator';
+import {
+	LenientThrottle,
+	ModerateThrottle,
+	StrictThrottle,
+} from '@app/core/decorators/throttle.decorator';
 import { CsrfService } from '@app/core/services/csrf/csrf.service';
 import { AppRequest, AuthRequest } from '@app/core/types/app-request';
 import { extractRequestInfo } from '@app/core/utils/request-info';
@@ -25,9 +30,16 @@ import {
 	Res,
 	UseGuards,
 } from '@nestjs/common';
+import {
+	ApiBearerAuth,
+	ApiOperation,
+	ApiResponse,
+	ApiTags,
+} from '@nestjs/swagger';
 import { FastifyReply } from 'fastify';
 import { AuthService } from './auth.service';
 
+@ApiTags('Authentication')
 @AppController('auth')
 export class AuthController {
 	constructor(
@@ -38,6 +50,20 @@ export class AuthController {
 	) {}
 
 	@Get('csrf')
+	@ApiOperation({
+		summary: 'Get CSRF token',
+		description: 'Generates and returns a CSRF token for form submissions',
+	})
+	@ApiResponse({
+		status: 200,
+		description: 'CSRF token generated successfully',
+		schema: {
+			example: {
+				statusCode: 200,
+				csrfToken: 'csrf-token-value',
+			},
+		},
+	})
 	async getCsrfToken(@Res() res: FastifyReply) {
 		const csrfToken = this.csrfService.generateToken();
 
@@ -53,7 +79,41 @@ export class AuthController {
 	}
 
 	@Post('login')
+	@StrictThrottle()
 	@UseGuards(LocalAuthGuard, CsrfGuard)
+	@ApiOperation({
+		summary: 'User login',
+		description:
+			'Authenticates a user and returns access and refresh tokens via HttpOnly cookies. Rate limited to 5 requests per minute.',
+	})
+	@ApiResponse({
+		status: 200,
+		description: 'Login successful',
+		schema: {
+			example: {
+				statusCode: 200,
+				user: {
+					id: 'user-id',
+					email: 'user@example.com',
+					fullName: 'John Doe',
+				},
+				message: 'Login Success',
+			},
+		},
+	})
+	@ApiResponse({
+		status: 401,
+		description: 'Invalid credentials or account not activated',
+		schema: {
+			example: {
+				message: 'Login Failure',
+			},
+		},
+	})
+	@ApiResponse({
+		status: 429,
+		description: 'Too many requests - rate limit exceeded',
+	})
 	async login(
 		@Res() res: FastifyReply,
 		@Body() loginDTO: LoginZodDto,
@@ -93,7 +153,38 @@ export class AuthController {
 	}
 
 	@Get('me')
+	@LenientThrottle()
 	@UseGuards(JwtAuthGuard)
+	@ApiBearerAuth()
+	@ApiOperation({
+		summary: 'Get current user',
+		description: 'Returns the authenticated user profile',
+	})
+	@ApiResponse({
+		status: 200,
+		description: 'User profile retrieved successfully',
+		schema: {
+			example: {
+				statusCode: 200,
+				data: {
+					id: 'user-id',
+					email: 'user@example.com',
+					username: 'johndoe',
+					fullName: 'John Doe',
+					confirmed: true,
+					blocked: false,
+				},
+			},
+		},
+	})
+	@ApiResponse({
+		status: 401,
+		description: 'Unauthorized - invalid or missing token',
+	})
+	@ApiResponse({
+		status: 404,
+		description: 'User not found',
+	})
 	async me(@Res() res: FastifyReply, @Req() req: AuthRequest) {
 		const user = await this.userService.findOne({ id: req.user.id });
 		if (!user) return res.code(HttpStatus.NOT_FOUND);
@@ -104,7 +195,34 @@ export class AuthController {
 	}
 
 	@Get('permissions/me')
+	@LenientThrottle()
 	@UseGuards(JwtAuthGuard)
+	@ApiBearerAuth()
+	@ApiOperation({
+		summary: 'Get current user permissions',
+		description: 'Returns all permissions assigned to the authenticated user',
+	})
+	@ApiResponse({
+		status: 200,
+		description: 'Permissions retrieved successfully',
+		schema: {
+			example: {
+				statusCode: 200,
+				data: {
+					permissions: [
+						'users:read',
+						'users:write',
+						'roles:read',
+						'api-keys:read',
+					],
+				},
+			},
+		},
+	})
+	@ApiResponse({
+		status: 401,
+		description: 'Unauthorized - invalid or missing token',
+	})
 	async getMyPermissions(@Res() res: FastifyReply, @Req() req: AuthRequest) {
 		// Retornar permisos desde JWT (cache) o DB fallback
 		let permissions: string[];
@@ -134,6 +252,26 @@ export class AuthController {
 
 	@Post('refresh')
 	@UseGuards(CsrfGuard)
+	@ApiOperation({
+		summary: 'Refresh access token',
+		description:
+			'Refreshes the access token using a valid refresh token from HttpOnly cookie',
+	})
+	@ApiResponse({
+		status: 200,
+		description: 'Session refreshed successfully',
+		schema: {
+			example: {
+				statusCode: 200,
+				success: true,
+				message: 'Refresh session successfully',
+			},
+		},
+	})
+	@ApiResponse({
+		status: 401,
+		description: 'Unauthorized - invalid or missing refresh token',
+	})
 	async refresh(@Res() res: FastifyReply, @Req() req: AppRequest) {
 		const refreshToken = req.cookies?.refreshToken;
 
@@ -175,6 +313,30 @@ export class AuthController {
 
 	@Post('logout')
 	@UseGuards(JwtAuthGuard, CsrfGuard)
+	@ApiBearerAuth()
+	@ApiOperation({
+		summary: 'Logout user',
+		description: 'Logs out the user and invalidates their session',
+	})
+	@ApiResponse({
+		status: 200,
+		description: 'Logout successful',
+		schema: {
+			example: {
+				statusCode: 200,
+				success: true,
+				message: 'Logout Success',
+			},
+		},
+	})
+	@ApiResponse({
+		status: 401,
+		description: 'Unauthorized - invalid or missing token',
+	})
+	@ApiResponse({
+		status: 403,
+		description: 'Forbidden - logout failed',
+	})
 	async logout(@Res() res: FastifyReply, @Req() req: AppRequest) {
 		const accessToken = req.cookies?.accessToken;
 		const result = await this.authService.closeSession(accessToken);
@@ -201,6 +363,25 @@ export class AuthController {
 
 	@Post('update-password')
 	@UseGuards(JwtAuthGuard)
+	@ApiBearerAuth()
+	@ApiOperation({
+		summary: 'Update password',
+		description: 'Updates the password for the authenticated user',
+	})
+	@ApiResponse({
+		status: 200,
+		description: 'Password changed successfully',
+		schema: {
+			example: {
+				statusCode: 200,
+				message: 'Password changed successfully',
+			},
+		},
+	})
+	@ApiResponse({
+		status: 401,
+		description: 'Unauthorized - invalid or missing token',
+	})
 	async updatePassword(
 		@Res() res: FastifyReply,
 		@Body() updatePasswordDto: UpdatePasswordZodDto,
@@ -215,6 +396,16 @@ export class AuthController {
 	}
 
 	@Post('request-recovery-account')
+	@ModerateThrottle()
+	@ApiOperation({
+		summary: 'Request account recovery',
+		description:
+			'Initiates account recovery process. Rate limited to 3 requests per 5 minutes.',
+	})
+	@ApiResponse({
+		status: 200,
+		description: 'Recovery process started',
+	})
 	async requestRecoveryAccount(
 		@Res() res: FastifyReply,
 		@Body() requestRecoveryAccountDto: RequestRecoveryAccountZodDto
@@ -228,6 +419,14 @@ export class AuthController {
 	}
 
 	@Post('recovery-account')
+	@ApiOperation({
+		summary: 'Complete account recovery',
+		description: 'Completes the account recovery process',
+	})
+	@ApiResponse({
+		status: 200,
+		description: 'Account recovered successfully',
+	})
 	async recoveryAccount(
 		@Res() res: FastifyReply,
 		@Body() recoveryAccountDto: RecoveryAccountZodDto
@@ -240,6 +439,18 @@ export class AuthController {
 	}
 
 	@Post('verify-token')
+	@ApiOperation({
+		summary: 'Verify token',
+		description: 'Verifies if a token is valid',
+	})
+	@ApiResponse({
+		status: 200,
+		description: 'Token is valid',
+	})
+	@ApiResponse({
+		status: 400,
+		description: 'Token is invalid',
+	})
 	async verifyToken(@Res() res: FastifyReply, @Body() body: TokenZodDto) {
 		const { token } = body;
 		const status = await this.authService.decodeVerificationToken(token);
@@ -256,6 +467,14 @@ export class AuthController {
 	}
 
 	@Post('confirm-email')
+	@ApiOperation({
+		summary: 'Confirm email',
+		description: 'Confirms user email address using a confirmation token',
+	})
+	@ApiResponse({
+		status: 200,
+		description: 'Email confirmed successfully',
+	})
 	async confirmEmail(
 		@Res() res: FastifyReply,
 		@Body() dto: ConfirmEmailZodDto
@@ -268,6 +487,16 @@ export class AuthController {
 	}
 
 	@Post('forgot-password')
+	@ModerateThrottle()
+	@ApiOperation({
+		summary: 'Forgot password',
+		description:
+			'Initiates password reset process. Rate limited to 3 requests per 5 minutes.',
+	})
+	@ApiResponse({
+		status: 200,
+		description: 'Password reset process started',
+	})
 	async forgotPassword(
 		@Res() res: FastifyReply,
 		@Body() dto: ForgotPasswordZodDto
@@ -281,6 +510,16 @@ export class AuthController {
 	}
 
 	@Post('reset-password')
+	@ModerateThrottle()
+	@ApiOperation({
+		summary: 'Reset password',
+		description:
+			'Resets user password using a reset token. Rate limited to 3 requests per 5 minutes.',
+	})
+	@ApiResponse({
+		status: 200,
+		description: 'Password reset successfully',
+	})
 	async resetPassword(
 		@Res() res: FastifyReply,
 		@Body() dto: ResetPasswordZodDto
