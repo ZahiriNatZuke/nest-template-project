@@ -11,6 +11,7 @@ import { PrismaModule } from '@app/core/services/prisma/prisma.module';
 import { SecurityAlertModule } from '@app/core/services/security-alert/security-alert.module';
 import { TasksService } from '@app/core/services/tasks/tasks.service';
 import { TokenCleanupService } from '@app/core/services/tasks/token-cleanup.service';
+import { TwoFactorModule } from '@app/core/services/two-factor/two-factor.module';
 import { envs } from '@app/env';
 import { ApiKeyModule } from '@app/modules/api-key/api-key.module';
 import { AuditLogModule } from '@app/modules/audit-log/audit-log.module';
@@ -36,6 +37,7 @@ import { createStream } from 'rotating-file-stream';
 		LoginAttemptModule,
 		NotificationModule,
 		SecurityAlertModule,
+		TwoFactorModule,
 		ScheduleModule.forRoot(),
 		// Rate Limiting Configuration
 		ThrottlerModule.forRoot([

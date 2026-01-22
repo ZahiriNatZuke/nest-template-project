@@ -1,3 +1,4 @@
+import { isPublicRoute } from '@app/core/constants/routes.constant';
 import { PrismaService } from '@app/core/services/prisma/prisma.service';
 import { AppRequest } from '@app/core/types/app-request';
 import {
@@ -13,6 +14,11 @@ export class ApiKeyValidationMiddleware implements NestMiddleware {
 	constructor(private prisma: PrismaService) {}
 
 	async use(req: AppRequest, _res: FastifyReply, next: () => void) {
+		// Si es una ruta pública, skip validación de API Key
+		if (isPublicRoute(req.url || '')) {
+			return next();
+		}
+
 		const apiKey = req.headers['x-api-key'] as string | undefined;
 
 		if (!apiKey) {
