@@ -9,8 +9,11 @@ import { UserModule } from '@app/modules/user/user.module';
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
-import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { PasswordRecoveryController } from './controllers/password-recovery.controller';
+import { ProfileController } from './controllers/profile.controller';
+import { SessionController } from './controllers/session.controller';
+import { TwoFactorController } from './controllers/two-factor.controller';
 import { AbacGuard } from './guards/abac.guard';
 import { PermissionsGuard } from './guards/permissions.guard';
 import { ResourceOwnerGuard } from './guards/resource-owner.guard';
@@ -42,7 +45,12 @@ import { VerifyJwtGuard } from './guards/verify-jwt.guard';
 			},
 		}),
 	],
-	controllers: [AuthController],
+	controllers: [
+		SessionController,
+		ProfileController,
+		PasswordRecoveryController,
+		TwoFactorController,
+	],
 	exports: [
 		PassportModule,
 		JwtModule,
