@@ -1,4 +1,4 @@
-import { AppRequest } from '@app/core/types/app-request';
+import { AppRequest, JwtPrincipal } from '@app/core/types/app-request';
 import {
 	CanActivate,
 	ExecutionContext,
@@ -7,6 +7,7 @@ import {
 	Injectable,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { JWTPayload } from '../interface/jwt.payload';
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
@@ -24,7 +25,18 @@ export class JwtAuthGuard implements CanActivate {
 		}
 
 		try {
-			request.user = this.jwtService.verify(token);
+			const payload: JWTPayload = this.jwtService.verify(token);
+
+			// The token names the subject `userId`, but every consumer downstream —
+			// PermissionsGuard, the 2FA controller, the profile controller — reads
+			// `id`, which is also what passport's JwtStrategy attaches. Without this
+			// alias `user.id` is undefined and PermissionsGuard rejects every
+			// request with "Unauthorized principal", including a fully authorised
+			// one.
+			// AppRequest.user is typed for the local-strategy shape; this guard
+			// attaches the JWT principal instead.
+			const principal: JwtPrincipal = { ...payload, id: payload.userId };
+			request.user = principal as unknown as AppRequest['user'];
 			return true;
 		} catch (_e) {
 			throw new HttpException(

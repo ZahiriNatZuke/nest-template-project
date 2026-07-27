@@ -1,3 +1,4 @@
+import { JWTPayload } from '@app/modules/auth/interface/jwt.payload';
 import { User } from '@prisma/client';
 import { FastifyRequest } from 'fastify';
 
@@ -37,6 +38,16 @@ export type SafeUser = Omit<
 >;
 
 export type AuthRequest = FastifyRequest & { user: User };
+
+/**
+ * What JwtAuthGuard attaches to the request: the token payload, plus `id` as
+ * an alias of `userId`.
+ *
+ * The alias is not cosmetic — PermissionsGuard, the 2FA controller and the
+ * profile controller all read `user.id`, and passport's JwtStrategy attaches
+ * it under that name too. Without it those consumers see `undefined`.
+ */
+export type JwtPrincipal = JWTPayload & { id: string };
 
 export type ApiKey = {
 	id: string;

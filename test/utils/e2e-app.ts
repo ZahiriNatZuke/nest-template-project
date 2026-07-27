@@ -220,5 +220,83 @@ export const apiKeyHeader = (): Record<string, string> => ({
 	'x-api-key': envs.WEB_APP_API_KEY,
 });
 
+/** Everything a spec needs to make an authenticated request. */
+export interface AuthContext {
+	/** `accessToken=...` — what JwtAuthGuard reads. */
+	cookie: string;
+	/** The raw JWT — what VerifyJwtGuard reads, from the Authorization header. */
+	accessToken: string;
+	/** Headers for an authenticated mutating request: API key, CSRF and bearer. */
+	headers: Record<string, string>;
+}
+
+/**
+ * Logs a user in and collects the credentials protected routes need.
+ *
+ * Both are required, and they come from the same token: `@Authz()` chains
+ * VerifyJwtGuard, which pulls the JWT from the Authorization header, and
+ * JwtAuthGuard, which pulls it from the accessToken cookie. A request carrying
+ * only one of the two is rejected.
+ */
+export async function authenticate(
+	request: { get: (url: string) => never; post: (url: string) => never },
+	identifier: string,
+	password: string,
+	device = 'jest-e2e'
+): Promise<AuthContext> {
+	const agent = request as unknown as {
+		get: (url: string) => SupertestLike;
+		post: (url: string) => SupertestLike;
+	};
+
+	const csrfRes = await agent.get(`${API}/auth/csrf`);
+	const csrfToken = csrfRes.body.csrfToken as string;
+
+	const loginRes = await agent
+		.post(`${API}/auth/login`)
+		.set(apiKeyHeader())
+		.set('x-csrf-token', csrfToken)
+		.send({ identifier, password, device });
+
+	const cookies = (loginRes.headers['set-cookie'] ?? []) as string[];
+	const accessCookie = cookies.find(c => c.startsWith('accessToken='));
+	if (!accessCookie) {
+		throw new Error(
+			`Login did not return an accessToken cookie (status ${loginRes.status}): ` +
+				JSON.stringify(loginRes.body)
+		);
+	}
+
+	const cookie = accessCookie.split(';')[0];
+	const accessToken = cookie.slice('accessToken='.length);
+
+	return {
+		cookie,
+		accessToken,
+		headers: {
+			...apiKeyHeader(),
+			'x-csrf-token': csrfToken,
+			authorization: `Bearer ${accessToken}`,
+		},
+	};
+}
+
+/** The parts of a supertest response the helper above reads. */
+interface SupertestResponse {
+	body: Record<string, unknown>;
+	status: number;
+	headers: Record<string, unknown>;
+}
+
+/**
+ * Minimal shape of the supertest chain. Declared locally rather than imported
+ * so this helper does not depend on supertest's own generics, which differ
+ * between the runtime package and @types/supertest.
+ */
+interface SupertestLike extends PromiseLike<SupertestResponse> {
+	set(field: string | Record<string, string>, value?: string): SupertestLike;
+	send(body: unknown): SupertestLike;
+}
+
 // Keeps the Nest logger quiet even for modules that build one at import time.
 Logger.overrideLogger(false);
