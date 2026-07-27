@@ -18,11 +18,15 @@ import { AbacGuard } from './guards/abac.guard';
 import { PermissionsGuard } from './guards/permissions.guard';
 import { ResourceOwnerGuard } from './guards/resource-owner.guard';
 import { VerifyJwtGuard } from './guards/verify-jwt.guard';
+import { PasswordService } from './services/password.service';
+import { TokenBlacklistService } from './services/token-blacklist.service';
 
 @Module({
 	providers: [
 		// Auth strategies & guards
 		AuthService,
+		PasswordService,
+		TokenBlacklistService,
 		LocalStrategy,
 		JwtStrategy,
 		PermissionsGuard,
@@ -55,6 +59,8 @@ import { VerifyJwtGuard } from './guards/verify-jwt.guard';
 		PassportModule,
 		JwtModule,
 		AuthService,
+		PasswordService,
+		TokenBlacklistService,
 		VerifyJwtGuard,
 		PermissionsGuard,
 		// Exportar nuevos servicios y guards para uso en otros módulos

@@ -1,27 +1,23 @@
 import { LoginAttemptService } from '@app/core/services/login-attempt/login-attempt.service';
-import { NotificationService } from '@app/core/services/notification/notification.service';
 import { PrismaService } from '@app/core/services/prisma/prisma.service';
 import { SafeUser, ValidatedUser } from '@app/core/types/app-request';
-import { ZodValidationException } from '@app/core/utils/zod';
 import { envs } from '@app/env';
-import { ConfirmEmailZodDto } from '@app/modules/auth/dto/confirm-email.dto';
-import { ForgotPasswordZodDto } from '@app/modules/auth/dto/forgot-password.dto';
-import { RecoveryAccountDto } from '@app/modules/auth/dto/recovery-account.dto';
-import { RequestRecoveryAccountZodDto } from '@app/modules/auth/dto/request-recovery-account.dto';
-import { ResetPasswordZodDto } from '@app/modules/auth/dto/reset-password.dto';
-import { UpdatePasswordZodDto } from '@app/modules/auth/dto/update-password.dto';
 import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
-import { ModuleRef } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { User } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
-import { pick } from 'lodash';
 import { v4 } from 'uuid';
-import { z } from 'zod';
 import { UserMapper } from '../user/user.mapper';
-import type { UserService } from '../user/user.service';
 import { JWTPayload } from './interface/jwt.payload';
+import { TokenBlacklistService } from './services/token-blacklist.service';
 
+/**
+ * Session authority: proving who a caller is, issuing their tokens, rotating
+ * them and tearing them down.
+ *
+ * Password changes, recovery and email confirmation live in PasswordService;
+ * token revocation lives in TokenBlacklistService.
+ */
 @Injectable()
 export class AuthService {
 	private readonly logger = new Logger(AuthService.name);
@@ -30,9 +26,8 @@ export class AuthService {
 		private prisma: PrismaService,
 		private jwtService: JwtService,
 		private userMapper: UserMapper,
-		private moduleRef: ModuleRef,
 		private loginAttemptService: LoginAttemptService,
-		_notificationService: NotificationService
+		private tokenBlacklist: TokenBlacklistService
 	) {}
 
 	async validateUser(
@@ -41,12 +36,14 @@ export class AuthService {
 		ipAddress?: string,
 		userAgent?: string
 	): Promise<ValidatedUser> {
+		const trackAttempts = Boolean(ipAddress && userAgent);
+
 		try {
 			// ✅ BRUTE FORCE PROTECTION: Validar que el usuario/IP no esté bloqueado
-			if (ipAddress && userAgent) {
+			if (trackAttempts) {
 				await this.loginAttemptService.validateLoginAttempt(
 					identifier,
-					ipAddress
+					ipAddress as string
 				);
 			}
 
@@ -61,11 +58,10 @@ export class AuthService {
 			const passwordMatch = await bcrypt.compare(pass, user.password ?? '');
 
 			if (user.confirmed && !user.blocked && passwordMatch) {
-				// ✅ Registrar intento exitoso
-				if (ipAddress && userAgent) {
+				if (trackAttempts) {
 					await this.loginAttemptService.recordSuccessfulAttempt({
 						identifier,
-						ipAddress,
+						ipAddress: ipAddress as string,
 						userAgent,
 					});
 				}
@@ -76,11 +72,10 @@ export class AuthService {
 				};
 			}
 
-			// ✅ Registrar intento fallido
-			if (ipAddress && userAgent) {
+			if (trackAttempts) {
 				await this.loginAttemptService.recordFailedAttempt({
 					identifier,
-					ipAddress,
+					ipAddress: ipAddress as string,
 					userAgent,
 				});
 			}
@@ -97,17 +92,17 @@ export class AuthService {
 				status: false,
 			};
 		} catch (error) {
-			// Si es error de brute force o bloqueado, re-lanzar
+			// A lockout is a 429 and must reach the caller as one, not be
+			// flattened into the generic 401 below.
 			if (error instanceof HttpException) {
 				throw error;
 			}
 
-			// Registrar intento fallido antes de lanzar excepción genérica
-			if (ipAddress && userAgent) {
+			if (trackAttempts) {
 				try {
 					await this.loginAttemptService.recordFailedAttempt({
 						identifier,
-						ipAddress,
+						ipAddress: ipAddress as string,
 						userAgent,
 					});
 				} catch (e) {
@@ -115,6 +110,8 @@ export class AuthService {
 				}
 			}
 
+			// Deliberately identical to a wrong password: the response must not
+			// reveal whether the account exists.
 			throw new HttpException(
 				{ message: 'Login Failure' },
 				HttpStatus.UNAUTHORIZED
@@ -128,24 +125,7 @@ export class AuthService {
 		ipAddress?: string,
 		userAgent?: string
 	) {
-		// Resolver permisos del usuario
-		const userRoles = await this.prisma.userRole.findMany({
-			where: { userId: user.id },
-			include: {
-				role: {
-					include: {
-						rolePermissions: { include: { permission: true } },
-					},
-				},
-			},
-		});
-		const perm = Array.from(
-			new Set(
-				userRoles.flatMap(ur =>
-					ur.role.rolePermissions.map(rp => rp.permission.identifier)
-				)
-			)
-		);
+		const perm = await this.resolvePermissions(user.id);
 
 		const data: JWTPayload = {
 			userId: user.id,
@@ -155,11 +135,7 @@ export class AuthService {
 			perm,
 		};
 
-		const accessToken = this.jwtService.sign(data);
-		const refreshToken = this.jwtService.sign(data, {
-			secret: envs.JWT_REFRESH_TOKEN_SECRET,
-			expiresIn: '1d',
-		});
+		const { accessToken, refreshToken } = this.signTokenPair(data);
 
 		// Check existing session for (userId, device)
 		const existing = await this.prisma.session.findUnique({
@@ -170,9 +146,7 @@ export class AuthService {
 		const newLoginSessionId = v4();
 
 		if (existing) {
-			// Blacklist old tokens
-			await this.blacklistToken(existing.accessToken, 8);
-			await this.blacklistToken(existing.refreshToken, 24);
+			await this.tokenBlacklist.blacklistSessionTokens(existing);
 
 			// Regenerate session ID y invalidar la sesión anterior
 			return this.prisma.session.update({
@@ -189,34 +163,7 @@ export class AuthService {
 			});
 		}
 
-		// ✅ CONCURRENT SESSIONS LIMIT: Verificar límite antes de crear nueva sesión
-		const activeSessions = await this.prisma.session.count({
-			where: { userId: user.id },
-		});
-
-		if (activeSessions >= envs.MAX_CONCURRENT_SESSIONS) {
-			// Encontrar la sesión más antigua y eliminarla
-			const oldestSession = await this.prisma.session.findFirst({
-				where: { userId: user.id },
-				orderBy: { createdAt: 'asc' },
-			});
-
-			if (oldestSession) {
-				this.logger.warn(
-					`User ${user.id} reached max concurrent sessions (${envs.MAX_CONCURRENT_SESSIONS}). ` +
-						`Removing oldest session: ${oldestSession.device}`
-				);
-
-				// Blacklist tokens de la sesión más antigua
-				await this.blacklistToken(oldestSession.accessToken, 8);
-				await this.blacklistToken(oldestSession.refreshToken, 24);
-
-				// Eliminar sesión más antigua
-				await this.prisma.session.delete({
-					where: { id: oldestSession.id },
-				});
-			}
-		}
+		await this.evictOldestSessionIfAtLimit(user.id);
 
 		return this.prisma.session.create({
 			data: {
@@ -238,15 +185,15 @@ export class AuthService {
 		requestUserAgent?: string
 	) {
 		try {
-			// Verificar que el token no esté en blacklist
-			const blacklisted = await this.isTokenBlacklisted(refreshToken);
+			// A refresh token presented after it was rotated means it leaked, so
+			// every session for that user goes, not just this one.
+			const blacklisted = await this.tokenBlacklist.isBlacklisted(refreshToken);
 			if (blacklisted) {
-				// Reuse detection: invalidar todas las sesiones del usuario
 				const session = await this.prisma.session.findUnique({
 					where: { refreshToken },
 				});
 				if (session) {
-					await this.invalidateAllUserSessions(session.userId);
+					await this.tokenBlacklist.invalidateAllUserSessions(session.userId);
 				}
 				return null;
 			}
@@ -255,35 +202,16 @@ export class AuthService {
 				where: { refreshToken },
 			});
 
-			// Validar IP y User-Agent si están disponibles
 			if (
-				requestIpAddress &&
-				requestUserAgent &&
-				currentSession.ipAddress &&
-				currentSession.userAgent
-			) {
-				const { isSimilarIP, isSimilarUserAgent } = await import(
-					'@app/core/utils/request-info'
-				);
-
-				const ipMatch = isSimilarIP(currentSession.ipAddress, requestIpAddress);
-				const uaMatch = isSimilarUserAgent(
-					currentSession.userAgent,
+				!(await this.matchesSessionContext(
+					currentSession,
+					requestIpAddress,
 					requestUserAgent
-				);
-
-				if (!ipMatch || !uaMatch) {
-					// Posible session hijacking - invalidar sesión
-					Logger.warn(
-						`Refresh token validation failed for session ${currentSession.id}. ` +
-							`IP match: ${ipMatch}, UA match: ${uaMatch}`,
-						'AuthService'
-					);
-
-					// Invalidar esta sesión sospechosa
-					await this.closeSession(currentSession.accessToken);
-					return null;
-				}
+				))
+			) {
+				// Posible session hijacking - invalidar sesión
+				await this.closeSession(currentSession.accessToken);
+				return null;
 			}
 
 			const user = await this.prisma.user.findUniqueOrThrow({
@@ -315,20 +243,15 @@ export class AuthService {
 				perm,
 			};
 
-			const newAccessToken = this.jwtService.sign(data);
-			const newRefreshToken = this.jwtService.sign(data, {
-				secret: envs.JWT_REFRESH_TOKEN_SECRET,
-				expiresIn: '1d',
-			});
+			const { accessToken, refreshToken: newRefreshToken } =
+				this.signTokenPair(data);
 
-			// Blacklist old tokens
-			await this.blacklistToken(currentSession.accessToken, 8);
-			await this.blacklistToken(currentSession.refreshToken, 24);
+			await this.tokenBlacklist.blacklistSessionTokens(currentSession);
 
 			const session = await this.prisma.session.update({
 				where: { id: currentSession.id },
 				data: {
-					accessToken: newAccessToken,
+					accessToken,
 					refreshToken: newRefreshToken,
 					lastActivityAt: new Date(),
 				},
@@ -346,9 +269,7 @@ export class AuthService {
 				where: { accessToken },
 			});
 
-			// Blacklist both tokens
-			await this.blacklistToken(session.accessToken, 8);
-			await this.blacklistToken(session.refreshToken, 24);
+			await this.tokenBlacklist.blacklistSessionTokens(session);
 
 			await this.prisma.session.delete({
 				where: { id: session.id },
@@ -373,291 +294,6 @@ export class AuthService {
 		return false;
 	}
 
-	async updatePassword(dto: UpdatePasswordZodDto, user: User) {
-		const userDb = await this.prisma.user.findUniqueOrThrow({
-			where: { id: user.id },
-		});
-
-		if (!(await bcrypt.compare(dto.current_password, user.password)))
-			throw new ZodValidationException(
-				new z.ZodError([
-					{
-						code: 'custom',
-						path: [],
-						message: 'Current password miss match',
-					},
-				])
-			);
-
-		if (dto.new_password !== dto.confirm_new_password) {
-			throw new ZodValidationException(
-				new z.ZodError([
-					{
-						code: 'custom',
-						path: [],
-						message: 'Passwords not match',
-					},
-				])
-			);
-		}
-
-		const newPassword = await bcrypt.hash(
-			dto.new_password,
-			bcrypt.genSaltSync(16)
-		);
-
-		// Invalidar todas las sesiones del usuario
-		await this.invalidateAllUserSessions(user.id);
-
-		return this.prisma.user.update({
-			where: { id: userDb.id },
-			data: { password: newPassword },
-		});
-	}
-
-	async recoverAccount({
-		email,
-		newPassword,
-		confirmNewPassword,
-	}: RecoveryAccountDto) {
-		if (newPassword !== confirmNewPassword) {
-			throw new ZodValidationException(
-				new z.ZodError([
-					{
-						code: 'custom',
-						path: [],
-						message: 'Passwords not match',
-					},
-				])
-			);
-		}
-
-		try {
-			const userDb = await this.prisma.user.findUniqueOrThrow({
-				where: { email },
-			});
-
-			return this.prisma.user.update({
-				where: { id: userDb.id },
-				data: {
-					password: await bcrypt.hash(newPassword, bcrypt.genSaltSync(16)),
-				},
-			});
-		} catch (_) {
-			throw new ZodValidationException(
-				new z.ZodError([
-					{
-						code: 'custom',
-						path: [],
-						message: 'Recovery account process failure',
-					},
-				])
-			);
-		}
-	}
-
-	async requestRecoveryAccount(dto: RequestRecoveryAccountZodDto) {
-		try {
-			// Lazy load UserService only when needed
-			const userService = this.moduleRef.get('UserService', {
-				strict: false,
-			}) as UserService;
-			const user = await userService?.findOne({ email: dto.email }, true);
-
-			if (!user) {
-				throw new ZodValidationException(
-					new z.ZodError([
-						{
-							code: 'custom',
-							path: [],
-							message: 'Request for recovery account failure',
-						},
-					])
-				);
-			}
-
-			const payload = pick(user, ['name', 'lastname', 'email', 'id']);
-			const token = this.jwtService.sign(
-				{ ...payload, xhr: v4() },
-				{
-					secret: envs.JWT_VERIFICATION_TOKEN_SECRET,
-					expiresIn: '30m',
-				}
-			);
-			const url = `${envs.RECOVERY_ACCOUNT_URL}?token=${token}&email=${dto.email}`;
-
-			new Logger(AuthService.name).debug(`>> [recovery-url]: ${url}`);
-		} catch (_e) {
-			throw new ZodValidationException(
-				new z.ZodError([
-					{
-						code: 'custom',
-						path: [],
-						message: 'Request for recovery account failure',
-					},
-				])
-			);
-		}
-	}
-
-	async decodeVerificationToken(token: string): Promise<boolean> {
-		try {
-			const payload = await this.jwtService.verify(token, {
-				secret: envs.JWT_VERIFICATION_TOKEN_SECRET,
-			});
-
-			return typeof payload === 'object' && 'xhr' in payload;
-		} catch (error) {
-			if (error?.name === 'TokenExpiredError') {
-				throw new ZodValidationException(
-					new z.ZodError([
-						{
-							code: 'custom',
-							path: [],
-							message: 'Recovered process expired, you must restart process',
-						},
-					])
-				);
-			}
-			throw new ZodValidationException(
-				new z.ZodError([
-					{
-						code: 'custom',
-						path: [],
-						message: 'Verification of recovery process failure',
-					},
-				])
-			);
-		}
-	}
-
-	async forgotPassword(dto: ForgotPasswordZodDto) {
-		const user = await this.prisma.user.findFirst({
-			where: { email: dto.email, deletedAt: null },
-		});
-		if (!user) {
-			throw new ZodValidationException(
-				new z.ZodError([
-					{ code: 'custom', path: [], message: 'User not found' },
-				])
-			);
-		}
-
-		const token = v4();
-		const expires = new Date(Date.now() + 15 * 60 * 1000); // 15m
-		await this.prisma.user.update({
-			where: { id: user.id },
-			data: {
-				resetPasswordToken: token,
-				resetPasswordExpiresAt: expires,
-			},
-		});
-
-		// TODO: send notification/email with reset link
-		this.logger.warn(
-			`TODO: send reset password email to ${user.email} with token ${token}`
-		);
-	}
-
-	async resetPassword(dto: ResetPasswordZodDto) {
-		const user = await this.prisma.user.findFirst({
-			where: {
-				email: dto.email,
-				resetPasswordToken: dto.token,
-				resetPasswordExpiresAt: { gt: new Date() },
-				deletedAt: null,
-			},
-		});
-
-		if (!user) {
-			throw new ZodValidationException(
-				new z.ZodError([
-					{
-						code: 'custom',
-						path: [],
-						message: 'Invalid or expired reset token',
-					},
-				])
-			);
-		}
-
-		const newPassword = await bcrypt.hash(
-			dto.newPassword,
-			bcrypt.genSaltSync(16)
-		);
-
-		await this.prisma.user.update({
-			where: { id: user.id },
-			data: {
-				password: newPassword,
-				resetPasswordToken: null,
-				resetPasswordExpiresAt: null,
-			},
-		});
-
-		await this.invalidateAllUserSessions(user.id);
-	}
-
-	async confirmEmail(dto: ConfirmEmailZodDto) {
-		const user = await this.prisma.user.findFirst({
-			where: {
-				confirmationToken: dto.token,
-				confirmationTokenExpiresAt: { gt: new Date() },
-				deletedAt: null,
-			},
-		});
-
-		if (!user) {
-			throw new ZodValidationException(
-				new z.ZodError([
-					{
-						code: 'custom',
-						path: [],
-						message: 'Invalid or expired confirmation token',
-					},
-				])
-			);
-		}
-
-		await this.prisma.user.update({
-			where: { id: user.id },
-			data: {
-				confirmed: true,
-				confirmedAt: new Date(),
-				confirmationToken: null,
-				confirmationTokenExpiresAt: null,
-			},
-		});
-	}
-
-	private async blacklistToken(token: string, expiresInHours: number) {
-		const expiresAt = new Date();
-		expiresAt.setHours(expiresAt.getHours() + expiresInHours);
-		await this.prisma.tokenBlacklist.create({
-			data: { token, expiresAt },
-		});
-	}
-
-	private async isTokenBlacklisted(token: string): Promise<boolean> {
-		const entry = await this.prisma.tokenBlacklist.findUnique({
-			where: { token },
-		});
-		if (!entry) return false;
-		// Verificar si aún no expiró
-		return entry.expiresAt > new Date();
-	}
-
-	public async invalidateAllUserSessions(userId: string) {
-		const sessions = await this.prisma.session.findMany({
-			where: { userId },
-		});
-		for (const session of sessions) {
-			await this.blacklistToken(session.accessToken, 8);
-			await this.blacklistToken(session.refreshToken, 24);
-		}
-		await this.prisma.session.deleteMany({ where: { userId } });
-	}
-
 	async getUserRolesWithPermissions(userId: string) {
 		return this.prisma.userRole.findMany({
 			where: { userId },
@@ -669,5 +305,92 @@ export class AuthService {
 				},
 			},
 		});
+	}
+
+	/** Flattens every permission reachable through the user's roles. */
+	private async resolvePermissions(userId: string): Promise<string[]> {
+		const userRoles = await this.getUserRolesWithPermissions(userId);
+		return Array.from(
+			new Set(
+				userRoles.flatMap(ur =>
+					ur.role.rolePermissions.map(rp => rp.permission.identifier)
+				)
+			)
+		);
+	}
+
+	private signTokenPair(data: JWTPayload) {
+		return {
+			accessToken: this.jwtService.sign(data),
+			refreshToken: this.jwtService.sign(data, {
+				secret: envs.JWT_REFRESH_TOKEN_SECRET,
+				expiresIn: '1d',
+			}),
+		};
+	}
+
+	/**
+	 * Enforces MAX_CONCURRENT_SESSIONS by dropping the oldest session, so a new
+	 * sign-in is never refused — it just costs the least recently created one.
+	 */
+	private async evictOldestSessionIfAtLimit(userId: string): Promise<void> {
+		const activeSessions = await this.prisma.session.count({
+			where: { userId },
+		});
+
+		if (activeSessions < envs.MAX_CONCURRENT_SESSIONS) return;
+
+		const oldestSession = await this.prisma.session.findFirst({
+			where: { userId },
+			orderBy: { createdAt: 'asc' },
+		});
+
+		if (!oldestSession) return;
+
+		this.logger.warn(
+			`User ${userId} reached max concurrent sessions (${envs.MAX_CONCURRENT_SESSIONS}). ` +
+				`Removing oldest session: ${oldestSession.device}`
+		);
+
+		await this.tokenBlacklist.blacklistSessionTokens(oldestSession);
+		await this.prisma.session.delete({ where: { id: oldestSession.id } });
+	}
+
+	/**
+	 * Compares the request's origin against the one recorded when the session
+	 * was created. Sessions stored without that context (older rows, or a
+	 * request that carried neither header) skip the check rather than being
+	 * rejected outright.
+	 */
+	private async matchesSessionContext(
+		session: { id: string; ipAddress: string | null; userAgent: string | null },
+		requestIpAddress?: string,
+		requestUserAgent?: string
+	): Promise<boolean> {
+		if (
+			!requestIpAddress ||
+			!requestUserAgent ||
+			!session.ipAddress ||
+			!session.userAgent
+		) {
+			return true;
+		}
+
+		const { isSimilarIP, isSimilarUserAgent } = await import(
+			'@app/core/utils/request-info'
+		);
+
+		const ipMatch = isSimilarIP(session.ipAddress, requestIpAddress);
+		const uaMatch = isSimilarUserAgent(session.userAgent, requestUserAgent);
+
+		if (!ipMatch || !uaMatch) {
+			this.logger.warn(
+				`Refresh token validation failed for session ${session.id}. ` +
+					`IP match: ${ipMatch}, UA match: ${uaMatch}`
+			);
+			return false;
+		}
+
+		return true;
 	}
 }

@@ -7,7 +7,7 @@ import { Injectable } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { Prisma, Role } from '@prisma/client';
 import { z } from 'zod';
-import type { AuthService } from '../auth/auth.service';
+import type { TokenBlacklistService } from '../auth/services/token-blacklist.service';
 
 @Injectable()
 export class RoleService {
@@ -146,11 +146,11 @@ export class RoleService {
 			where: { roleId },
 			select: { userId: true },
 		});
-		const authService = this.moduleRef.get('AuthService', {
+		const tokenBlacklist = this.moduleRef.get('TokenBlacklistService', {
 			strict: false,
-		}) as AuthService;
+		}) as TokenBlacklistService;
 		for (const ur of userRoles) {
-			await (authService as AuthService).invalidateAllUserSessions(ur.userId);
+			await tokenBlacklist?.invalidateAllUserSessions(ur.userId);
 		}
 	}
 }

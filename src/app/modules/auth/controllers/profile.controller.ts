@@ -22,12 +22,14 @@ import {
 } from '@nestjs/swagger';
 import { FastifyReply } from 'fastify';
 import { AuthService } from '../auth.service';
+import { PasswordService } from '../services/password.service';
 
 @ApiTags('Authentication - Profile')
 @AppController('auth')
 export class ProfileController {
 	constructor(
 		private authService: AuthService,
+		private passwordService: PasswordService,
 		private userService: UserService,
 		private userMapper: UserMapper
 	) {}
@@ -156,7 +158,7 @@ export class ProfileController {
 		@Body() updatePasswordDto: UpdatePasswordZodDto,
 		@Req() req: AuthRequest
 	) {
-		await this.authService.updatePassword(updatePasswordDto, req.user);
+		await this.passwordService.updatePassword(updatePasswordDto, req.user);
 
 		return res.code(HttpStatus.OK).send({
 			statusCode: 200,

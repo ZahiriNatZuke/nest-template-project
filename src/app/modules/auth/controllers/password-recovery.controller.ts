@@ -9,12 +9,12 @@ import { TokenZodDto } from '@app/modules/auth/dto/token.dto';
 import { Body, HttpStatus, Post, Res } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { FastifyReply } from 'fastify';
-import { AuthService } from '../auth.service';
+import { PasswordService } from '../services/password.service';
 
 @ApiTags('Authentication - Password Recovery')
 @AppController('auth')
 export class PasswordRecoveryController {
-	constructor(private authService: AuthService) {}
+	constructor(private passwordService: PasswordService) {}
 
 	@Post('request-recovery-account')
 	@ModerateThrottle()
@@ -31,7 +31,9 @@ export class PasswordRecoveryController {
 		@Res() res: FastifyReply,
 		@Body() requestRecoveryAccountDto: RequestRecoveryAccountZodDto
 	) {
-		await this.authService.requestRecoveryAccount(requestRecoveryAccountDto);
+		await this.passwordService.requestRecoveryAccount(
+			requestRecoveryAccountDto
+		);
 		return res.code(HttpStatus.OK).send({
 			statusCode: 200,
 			message:
@@ -52,7 +54,7 @@ export class PasswordRecoveryController {
 		@Res() res: FastifyReply,
 		@Body() recoveryAccountDto: RecoveryAccountZodDto
 	) {
-		await this.authService.recoverAccount(recoveryAccountDto);
+		await this.passwordService.recoverAccount(recoveryAccountDto);
 		return res.code(HttpStatus.OK).send({
 			statusCode: 200,
 			message: 'Recovery account successfully, now you can go to login page',
@@ -74,7 +76,7 @@ export class PasswordRecoveryController {
 	})
 	async verifyToken(@Res() res: FastifyReply, @Body() body: TokenZodDto) {
 		const { token } = body;
-		const status = await this.authService.decodeVerificationToken(token);
+		const status = await this.passwordService.decodeVerificationToken(token);
 		if (status)
 			return res.code(HttpStatus.OK).send({
 				statusCode: 200,
@@ -100,7 +102,7 @@ export class PasswordRecoveryController {
 		@Res() res: FastifyReply,
 		@Body() dto: ConfirmEmailZodDto
 	) {
-		await this.authService.confirmEmail(dto);
+		await this.passwordService.confirmEmail(dto);
 		return res.code(HttpStatus.OK).send({
 			statusCode: 200,
 			message: 'Email confirmed successfully',
@@ -122,7 +124,7 @@ export class PasswordRecoveryController {
 		@Res() res: FastifyReply,
 		@Body() dto: ForgotPasswordZodDto
 	) {
-		await this.authService.forgotPassword(dto);
+		await this.passwordService.forgotPassword(dto);
 		return res.code(HttpStatus.OK).send({
 			statusCode: 200,
 			message:
@@ -145,7 +147,7 @@ export class PasswordRecoveryController {
 		@Res() res: FastifyReply,
 		@Body() dto: ResetPasswordZodDto
 	) {
-		await this.authService.resetPassword(dto);
+		await this.passwordService.resetPassword(dto);
 		return res.code(HttpStatus.OK).send({
 			statusCode: 200,
 			message: 'Password reset successfully',
