@@ -12,7 +12,7 @@ import { FastifyRequest } from 'fastify';
 export class CsrfGuard implements CanActivate {
 	constructor(private csrfService: CsrfService) {}
 
-	canActivate(context: ExecutionContext): boolean {
+	async canActivate(context: ExecutionContext): Promise<boolean> {
 		const request: FastifyRequest = context.switchToHttp().getRequest();
 		const method = request.method;
 
@@ -30,7 +30,7 @@ export class CsrfGuard implements CanActivate {
 			);
 		}
 
-		if (!this.csrfService.validateToken(csrfToken)) {
+		if (!(await this.csrfService.validateToken(csrfToken))) {
 			throw new HttpException(
 				{ error: 'CSRF token invalid', code: 'CSRF_INVALID' },
 				HttpStatus.FORBIDDEN

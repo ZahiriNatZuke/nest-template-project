@@ -101,6 +101,24 @@ describe('Authentication (e2e)', () => {
 	});
 
 	describe('GET /auth/csrf', () => {
+		it('returns a token and persists it', async () => {
+			const res = await http().get(`${API}/auth/csrf`).expect(200);
+
+			expect(typeof res.body.csrfToken).toBe('string');
+			expect(res.body.csrfToken).toHaveLength(64);
+
+			await expect(
+				prisma.csrfToken.findUnique({ where: { token: res.body.csrfToken } })
+			).resolves.not.toBeNull();
+		});
+
+		it('sets the token in a readable XSRF-TOKEN cookie', async () => {
+			const res = await http().get(`${API}/auth/csrf`).expect(200);
+			const cookies = res.headers['set-cookie'] as unknown as string[];
+
+			expect(cookies.join(';')).toContain(`XSRF-TOKEN=${res.body.csrfToken}`);
+		});
+
 		it('issues a different token on every call', async () => {
 			const [first, second] = await Promise.all([
 				getCsrfToken(),
@@ -124,6 +142,39 @@ describe('Authentication (e2e)', () => {
 				.expect(403);
 		});
 
+		// The guard has to actually validate the token against storage, not
+		// merely check that the header is present.
+		it('rejects a login with a well-formed but unissued CSRF token', async () => {
+			await http()
+				.post(`${API}/auth/login`)
+				.set(apiKeyHeader())
+				.set('x-csrf-token', 'f'.repeat(64))
+				.send({
+					identifier: fixtures.adminUser.email,
+					password: fixtures.password,
+					device: 'jest-e2e',
+				})
+				.expect(403);
+		});
+
+		it('rejects a login with an expired CSRF token', async () => {
+			const csrfToken = await getCsrfToken();
+			await prisma.csrfToken.update({
+				where: { token: csrfToken },
+				data: { expiresAt: new Date(Date.now() - 1000) },
+			});
+
+			await http()
+				.post(`${API}/auth/login`)
+				.set(apiKeyHeader())
+				.set('x-csrf-token', csrfToken)
+				.send({
+					identifier: fixtures.adminUser.email,
+					password: fixtures.password,
+					device: 'jest-e2e',
+				})
+				.expect(403);
+		});
 	});
 
 	describe('POST /auth/login', () => {

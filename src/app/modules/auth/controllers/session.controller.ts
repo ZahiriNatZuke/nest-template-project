@@ -50,7 +50,7 @@ export class SessionController {
 		},
 	})
 	async getCsrfToken(@Res() res: FastifyReply) {
-		const csrfToken = this.csrfService.generateToken();
+		const csrfToken = await this.csrfService.generateToken();
 
 		res.header(
 			'Set-Cookie',
