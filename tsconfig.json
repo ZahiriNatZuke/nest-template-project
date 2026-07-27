@@ -21,7 +21,8 @@
 		"resolveJsonModule": true,
 		"paths": {
 			"@app/env": ["src/config/envs"],
-			"@app/*": ["src/app/*"]
+			"@app/*": ["src/app/*"],
+			"@test/*": ["test/*"]
 		}
 	}
 }
