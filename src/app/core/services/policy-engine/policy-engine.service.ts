@@ -64,7 +64,7 @@ export class PolicyEngineService {
 			where: { id: policyId },
 		});
 
-		if (!policy || !policy.active) {
+		if (!policy?.active) {
 			this.logger.warn(`Policy ${policyId} not found or inactive`);
 			return false;
 		}
