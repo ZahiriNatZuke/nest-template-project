@@ -31,10 +31,13 @@ updates:
           - 'ts-node'
           - 'typescript'
     ignore:
-      # TypeScript 7 is the current `latest`, but NestJS 11 does not support it
-      # yet. Drop this entry once it does.
+      # TypeScript is held at 5.x. Verified against 6.0.3: `baseUrl` becomes a
+      # deprecation *error* needing `ignoreDeprecations`, and the tighter
+      # `catch` typing turns `e` into `unknown`, breaking verify-jwt.guard.ts
+      # and password.service.ts. Raising this needs a migration commit, not a
+      # version bump — see the note in the README before changing it.
       - dependency-name: typescript
-        versions: ['>=7']
+        versions: ['>=6']
 
   - package-ecosystem: github-actions
     directory: /
