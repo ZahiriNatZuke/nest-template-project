@@ -83,7 +83,7 @@
     "@types/bcrypt": "6.0.0",
     "@types/jest": "30.0.0",
     "@types/lodash": "4.17.24",
-    "@types/node": "25.0.10",
+    "@types/node": "26.1.2",
     "@types/passport": "1.0.17",
     "@types/passport-jwt": "4.0.1",
     "@types/passport-local": "1.0.38",
