@@ -1,0 +1,42 @@
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      # One PR per ecosystem instead of one per package: these move in lockstep
+      # and reviewing them apart is busywork.
+      nestjs:
+        patterns:
+          - '@nestjs/*'
+      prisma:
+        patterns:
+          - 'prisma'
+          - '@prisma/*'
+      fastify:
+        patterns:
+          - 'fastify'
+          - '@fastify/*'
+      types:
+        patterns:
+          - '@types/*'
+      dev-tooling:
+        patterns:
+          - '@biomejs/*'
+          - '@swc/*'
+          - 'jest'
+          - 'ts-node'
+          - 'typescript'
+    ignore:
+      # TypeScript 7 is the current `latest`, but NestJS 11 does not support it
+      # yet. Drop this entry once it does.
+      - dependency-name: typescript
+        versions: ['>=7']
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

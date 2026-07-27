@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Pinned so a pnpm release cannot change CI behaviour without a commit.
+  PNPM_VERSION: 10.33.0
+
+jobs:
+  quality:
+    name: Lint, typecheck and unit tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v5
+        with:
+          # @nestjs/core declares `node >= 20`; 22 is the current LTS.
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        # Types from the generated client are needed by both the typecheck and
+        # the unit tests, so this cannot wait for the build step.
+        run: pnpm prisma generate
+
+      - name: Validate Prisma schema
+        run: pnpm prisma validate
+
+      - name: Lint
+        # `biome ci` is the read-only counterpart of the `lint` script, which
+        # applies fixes — CI must fail on findings, not silently rewrite them.
+        run: pnpm exec biome ci
+
+      - name: Typecheck
+        # The test transformer is @swc/jest, which strips types without
+        # checking them. This step is what keeps the specs type-safe.
+        run: pnpm run typecheck
+
+      - name: Unit tests
+        run: pnpm run test:ci
+
+      - name: Build
+        run: pnpm run build
