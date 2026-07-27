@@ -1,6 +1,6 @@
+import { randomUUID } from 'node:crypto';
 import { Injectable, NestMiddleware } from '@nestjs/common';
 import { FastifyReply, FastifyRequest } from 'fastify';
-import { v4 as uuidv4 } from 'uuid';
 
 /**
  * Middleware to add correlation ID to every request
@@ -13,7 +13,7 @@ export class CorrelationIdMiddleware implements NestMiddleware {
 		const correlationId =
 			(req.headers['x-correlation-id'] as string) ||
 			(req.headers['x-request-id'] as string) ||
-			uuidv4();
+			randomUUID();
 
 		// Store in request for later use
 		const requestWithCorrelation = req as FastifyRequest['raw'] & {

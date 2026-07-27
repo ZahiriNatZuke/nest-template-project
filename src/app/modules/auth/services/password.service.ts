@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { PrismaService } from '@app/core/services/prisma/prisma.service';
 import { ZodValidationException } from '@app/core/utils/zod';
 import { envs } from '@app/env';
@@ -13,7 +14,6 @@ import { JwtService } from '@nestjs/jwt';
 import { User } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { pick } from 'lodash';
-import { v4 } from 'uuid';
 import { z } from 'zod';
 import type { UserService } from '../../user/user.service';
 import { TokenBlacklistService } from './token-blacklist.service';
@@ -116,7 +116,7 @@ export class PasswordService {
 
 			const payload = pick(user, ['name', 'lastname', 'email', 'id']);
 			const token = this.jwtService.sign(
-				{ ...payload, xhr: v4() },
+				{ ...payload, xhr: randomUUID() },
 				{
 					secret: envs.JWT_VERIFICATION_TOKEN_SECRET,
 					expiresIn: '30m',
@@ -158,7 +158,7 @@ export class PasswordService {
 			throw validationError('User not found');
 		}
 
-		const token = v4();
+		const token = randomUUID();
 		const expires = new Date(Date.now() + 15 * 60 * 1000); // 15m
 		await this.prisma.user.update({
 			where: { id: user.id },
