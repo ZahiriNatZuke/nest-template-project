@@ -13,6 +13,16 @@ concurrency:
 env:
   # Pinned so a pnpm release cannot change CI behaviour without a commit.
   PNPM_VERSION: 10.33.0
+  # prisma.config.ts resolves `env('DATABASE_URL')` eagerly and throws when it
+  # is unset, so every Prisma CLI invocation needs it present — including
+  # `generate` and `validate`, which never open a connection. Without a .env
+  # file on the runner, the first `prisma generate` fails with
+  # PrismaConfigEnvError before anything else can run.
+  #
+  # Set at workflow level so both jobs inherit it. The e2e job talks to a real
+  # PostgreSQL at this address; the quality job only needs the variable to
+  # exist and never connects.
+  DATABASE_URL: postgresql://postgres:postgres@localhost:5433/nest_template_test?schema=public
 
 jobs:
   quality:
@@ -100,8 +110,6 @@ jobs:
 
       - name: Apply migrations to the test database
         run: pnpm prisma migrate deploy
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5433/nest_template_test?schema=public
 
       - name: End-to-end tests
         run: pnpm run test:e2e
