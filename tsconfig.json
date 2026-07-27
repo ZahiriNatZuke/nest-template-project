@@ -22,6 +22,7 @@
 		"paths": {
 			"@app/env": ["src/config/envs"],
 			"@app/*": ["src/app/*"],
+			"@src/*": ["src/*"],
 			"@test/*": ["test/*"]
 		}
 	}
