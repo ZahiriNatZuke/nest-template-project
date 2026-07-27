@@ -10,7 +10,7 @@ import { Prisma, User } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { v4 } from 'uuid';
 import { z } from 'zod';
-import type { AuthService } from '../auth/auth.service';
+import type { TokenBlacklistService } from '../auth/services/token-blacklist.service';
 
 export interface UserPagination {
 	skip?: number;
@@ -210,11 +210,11 @@ export class UserService {
 		});
 
 		// Invalidar sesiones para refrescar permisos
-		const authService = this.moduleRef.get('AuthService', {
+		const tokenBlacklist = this.moduleRef.get('TokenBlacklistService', {
 			strict: false,
-		}) as AuthService;
-		if (authService) {
-			await (authService as AuthService).invalidateAllUserSessions(userId);
+		}) as TokenBlacklistService;
+		if (tokenBlacklist) {
+			await tokenBlacklist?.invalidateAllUserSessions(userId);
 		}
 
 		return this.prisma.user.findUniqueOrThrow({
@@ -246,11 +246,11 @@ export class UserService {
 		});
 
 		// Invalidar sesiones para refrescar permisos
-		const authService = this.moduleRef.get('AuthService', {
+		const tokenBlacklist = this.moduleRef.get('TokenBlacklistService', {
 			strict: false,
-		}) as AuthService;
-		if (authService) {
-			await (authService as AuthService).invalidateAllUserSessions(userId);
+		}) as TokenBlacklistService;
+		if (tokenBlacklist) {
+			await tokenBlacklist?.invalidateAllUserSessions(userId);
 		}
 
 		return this.prisma.user.findUniqueOrThrow({
