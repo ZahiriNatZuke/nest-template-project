@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { AuditService } from '@app/core/services/audit/audit.service';
 import { ChangeLogService } from '@app/core/services/change-log/changelog.service';
 import { PrismaService } from '@app/core/services/prisma/prisma.service';
@@ -8,7 +9,6 @@ import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { Prisma, User } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
-import { v4 } from 'uuid';
 import { z } from 'zod';
 import type { TokenBlacklistService } from '../auth/services/token-blacklist.service';
 
@@ -127,7 +127,7 @@ export class UserService {
 	private async createUser(payload: CreateUserZodDto) {
 		const { password, ...input } = payload;
 		const pwd = await bcrypt.hash(password, bcrypt.genSaltSync(16));
-		const confirmationToken = v4();
+		const confirmationToken = randomUUID();
 		const confirmationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
 		const userRole = await this.prisma.role.findUniqueOrThrow({
 			where: { identifier: 'USER_ROLE' },

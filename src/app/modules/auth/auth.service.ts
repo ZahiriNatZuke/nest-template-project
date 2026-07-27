@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { LoginAttemptService } from '@app/core/services/login-attempt/login-attempt.service';
 import { PrismaService } from '@app/core/services/prisma/prisma.service';
 import { SafeUser, ValidatedUser } from '@app/core/types/app-request';
@@ -6,7 +7,6 @@ import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { User } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
-import { v4 } from 'uuid';
 import { UserMapper } from '../user/user.mapper';
 import { JWTPayload } from './interface/jwt.payload';
 import { TokenBlacklistService } from './services/token-blacklist.service';
@@ -143,7 +143,7 @@ export class AuthService {
 		});
 
 		// ✅ SESSION FIXATION PROTECTION: Generar nuevo loginSessionId
-		const newLoginSessionId = v4();
+		const newLoginSessionId = randomUUID();
 
 		if (existing) {
 			await this.tokenBlacklist.blacklistSessionTokens(existing);

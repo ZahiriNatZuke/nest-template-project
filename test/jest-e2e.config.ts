@@ -46,7 +46,7 @@ const config: Config = {
 	},
 	// Same rationale as the unit config: these packages are ESM-only and Jest's
 	// runtime cannot require() them, so they go through the transformer.
-	transformIgnorePatterns: ['node_modules/(?!.*(@scure|@noble|uuid|cookie))'],
+	transformIgnorePatterns: ['node_modules/(?!.*(@scure|@noble|cookie))'],
 	moduleNameMapper: {
 		'^@app/env$': '<rootDir>/src/config/envs',
 		'^@app/(.*)$': '<rootDir>/src/app/$1',
