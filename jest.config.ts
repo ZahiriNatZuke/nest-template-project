@@ -41,18 +41,27 @@ const config: Config = {
 	transform: {
 		'^.+\\.(t|j)s$': ['@swc/jest', swcOptions],
 	},
-	// otplib pulls in @scure/base and @noble/hashes, which are ESM-only. Node 22
-	// can `require()` those directly, but Jest's runtime cannot — so they have to
-	// go through the transformer instead of being skipped like the rest of
-	// node_modules. The `.*` before the group is what makes this work under
-	// pnpm, where the real path is node_modules/.pnpm/@scure+base@x/node_modules/
-	// @scure/base and the plain `/node_modules/` prefix appears twice.
-	transformIgnorePatterns: ['node_modules/(?!.*(@scure|@noble))'],
+	// These packages are ESM-only: uuid v13, plus @scure/base and @noble/hashes
+	// which otplib 13.4 pulls in. Node 22 can `require()` them directly, but
+	// Jest's runtime cannot — so they have to go through the transformer instead
+	// of being skipped like the rest of node_modules. The `.*` before the group
+	// is what makes this work under pnpm, where the real path is
+	// node_modules/.pnpm/uuid@13.0.0/node_modules/uuid and the plain
+	// `/node_modules/` prefix therefore appears twice.
+	//
+	// `cookie` is here for a second reason: @fastify/cookie does
+	// `await import('cookie')` at plugin registration. Left untransformed that
+	// needs --experimental-vm-modules, which in turn makes Jest treat uuid as
+	// real ESM and demand Node 24.9+. Running @fastify/cookie through SWC with
+	// `module.type = 'commonjs'` lowers the dynamic import to a require and the
+	// whole problem disappears.
+	transformIgnorePatterns: ['node_modules/(?!.*(@scure|@noble|uuid|cookie))'],
 	// Mirrors the `paths` block in tsconfig.json. `@app/env` is listed first
 	// because `^@app/(.*)$` would otherwise swallow it.
 	moduleNameMapper: {
 		'^@app/env$': '<rootDir>/src/config/envs',
 		'^@app/(.*)$': '<rootDir>/src/app/$1',
+		'^@src/(.*)$': '<rootDir>/src/$1',
 		'^@test/(.*)$': '<rootDir>/test/$1',
 	},
 	setupFiles: ['<rootDir>/test/setup-env.ts'],
