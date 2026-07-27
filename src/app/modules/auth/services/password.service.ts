@@ -124,7 +124,7 @@ export class PasswordService {
 			);
 			const url = `${envs.RECOVERY_ACCOUNT_URL}?token=${token}&email=${dto.email}`;
 
-			// TODO: hand this to NotificationService once a provider is wired up.
+			// TODO: hand this to NotificationPort once a provider is wired up.
 			this.logger.debug(`>> [recovery-url]: ${url}`);
 		} catch (_e) {
 			throw validationError('Request for recovery account failure');

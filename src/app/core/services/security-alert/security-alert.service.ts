@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AuditService } from '../audit/audit.service';
-import { NotificationService } from '../notification/notification.service';
+import { NotificationPort } from '../notification/notification.port';
 
 export enum SecurityAlertType {
 	BRUTE_FORCE_ATTEMPT = 'BRUTE_FORCE_ATTEMPT',
@@ -38,7 +38,7 @@ export class SecurityAlertService {
 	private readonly logger = new Logger(SecurityAlertService.name);
 
 	constructor(
-		private notificationService: NotificationService,
+		private notificationService: NotificationPort,
 		private auditService: AuditService
 	) {}
 
