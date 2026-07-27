@@ -1,0 +1,37 @@
+# Disposable PostgreSQL for the end-to-end suite.
+#
+#   docker compose -f docker-compose.test.yml up -d
+#   pnpm test:e2e
+#   docker compose -f docker-compose.test.yml down -v
+#
+# Port 5433 keeps this out of the way of a development database already
+# listening on 5432, and matches DATABASE_URL in .env.test. Storage is tmpfs so
+# the data never outlives the container and each run starts clean.
+
+services:
+  postgres-test:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: nest_template_test
+    ports:
+      - '5433:5432'
+    tmpfs:
+      - /var/lib/postgresql/data
+    command:
+      # Durability buys nothing for a throwaway database and costs a lot of
+      # wall-clock time across an e2e suite.
+      - postgres
+      - -c
+      - fsync=off
+      - -c
+      - synchronous_commit=off
+      - -c
+      - full_page_writes=off
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d nest_template_test']
+      interval: 2s
+      timeout: 5s
+      retries: 15
+      start_period: 5s
