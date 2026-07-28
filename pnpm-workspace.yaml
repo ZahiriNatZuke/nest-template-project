@@ -17,6 +17,7 @@
 # resolves a patched version on its own, the entry becomes dead weight and
 # should be dropped rather than left to pin something older than upstream.
 overrides:
+  # --- production tree ---
   # Router confusion in the fastify route matcher.
   find-my-way: '9.7.0'
   # ReDoS in the URI parser used by ajv and @fastify/ajv-compiler.
@@ -24,6 +25,39 @@ overrides:
   ajv: '8.18.0'
   # Prototype pollution; reaches us through @nestjs/swagger.
   js-yaml: '5.2.2'
+
+  # --- development tree ---
+  # Eleven Dependabot advisories, all `scope: development`, which is why
+  # `pnpm audit --prod` stayed clean while the repository page showed alerts:
+  # the two look at different trees and never disagreed.
+  #
+  # Same reason as the block above — @nestjs/cli, @swc/cli, @types/jest and
+  # @types/supertest are each already at their latest release and still resolve
+  # the vulnerable versions, so there is no bump to wait for.
+  #
+  # Every key is version-ranged. A bare `minimatch: '3.1.4'` would drag the 9.x
+  # and 10.x copies down to 3.x and break the tooling that asks for them; the
+  # range pins each affected major to its own patched release and leaves the
+  # copies that are already fine alone.
+  #
+  # These never reach production — `pnpm prune --prod` drops them before the
+  # runtime stage — but they do run on developer machines and in CI.
+  # brace-expansion is the exception to the range-pinning above: it takes a
+  # single unranged entry. GHSA-mh99-v99m-4gvg declares its affected range as
+  # `<=5.0.7` with no lower bound, so it matches 1.1.16 — the last release of
+  # the 1.x line — as readily as it matches 5.0.7, and there is no 1.x patch to
+  # move to. Only 5.0.8 satisfies it. 5.x still ships a CommonJS entry point
+  # alongside the ESM one, so the 3.x minimatch below can require it.
+  brace-expansion: '5.0.8'
+  minimatch@3: '3.1.4'
+  minimatch@9: '9.0.7'
+  picomatch@2: '2.3.2'
+  picomatch@4: '4.0.4'
+  qs: '6.15.2'
+  form-data: '4.0.6'
+  piscina: '4.9.3'
+  '@babel/core': '7.29.6'
+  diff@4: '4.0.4'
 
 # @nestjs/platform-fastify declares `@fastify/static: ^8.0.0 || ^9.0.0`, and the
 # only version without an open advisory is 10.1.2. The peer is optional and the
