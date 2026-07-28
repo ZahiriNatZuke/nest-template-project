@@ -92,13 +92,26 @@ export class AuditService {
 		skip?: number;
 		take?: number;
 	}) {
-		const { userId, action, entityType, skip, take } = params;
+		const { skip, take } = params;
+
+		// An absent filter has to become `undefined`, not `''`. The controller
+		// runs these query parameters through TrimQuerySearchPipe, which turns a
+		// missing value into an empty string — and since these are matched for
+		// equality rather than with `contains`, `where: { action: '' }` matched
+		// no row at all. An unfiltered GET /audit-log therefore always came back
+		// empty, which for an audit trail is the worst possible failure: the
+		// records were being written, and the endpoint that exists to show them
+		// reported none.
+		const where = {
+			userId: params.userId || undefined,
+			action: params.action || undefined,
+			entityType: params.entityType || undefined,
+		};
+
 		return this.prisma.$transaction([
-			this.prisma.auditLog.count({
-				where: { userId, action, entityType },
-			}),
+			this.prisma.auditLog.count({ where }),
 			this.prisma.auditLog.findMany({
-				where: { userId, action, entityType },
+				where,
 				orderBy: { createdAt: 'desc' },
 				skip,
 				take,

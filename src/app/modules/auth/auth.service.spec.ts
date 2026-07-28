@@ -1,5 +1,6 @@
 import { LoginAttemptService } from '@app/core/services/login-attempt/login-attempt.service';
 import { PrismaService } from '@app/core/services/prisma/prisma.service';
+import { RoleHierarchyService } from '@app/core/services/role-hierarchy/role-hierarchy.service';
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
@@ -31,6 +32,7 @@ describe('AuthService', () => {
 		recordSuccessfulAttempt: jest.Mock;
 		recordFailedAttempt: jest.Mock;
 	};
+	let roleHierarchy: { getInheritedPermissions: jest.Mock };
 
 	const IP = '203.0.113.10';
 	const UA = 'Mozilla/5.0 (jest)';
@@ -46,6 +48,11 @@ describe('AuthService', () => {
 			recordSuccessfulAttempt: jest.fn().mockResolvedValue(undefined),
 			recordFailedAttempt: jest.fn().mockResolvedValue(undefined),
 		};
+		// Empty by default: most specs are about the direct grants, and an empty
+		// set is also the shortcut path that skips the identifier lookup.
+		roleHierarchy = {
+			getInheritedPermissions: jest.fn().mockResolvedValue(new Set<string>()),
+		};
 
 		const module: TestingModule = await Test.createTestingModule({
 			providers: [
@@ -55,6 +62,10 @@ describe('AuthService', () => {
 				{ provide: JwtService, useValue: jwtService },
 				{ provide: LoginAttemptService, useValue: loginAttempt },
 				TokenBlacklistService,
+				// Stubbed: resolving the hierarchy is RoleHierarchyService's own
+				// concern and has its own suite. What matters here is that
+				// generateSession asks for it and merges the answer in.
+				{ provide: RoleHierarchyService, useValue: roleHierarchy },
 			],
 		}).compile();
 
@@ -235,6 +246,33 @@ describe('AuthService', () => {
 					perm: ['users:read', 'users:write'],
 				})
 			);
+		});
+
+		// Inheritance used to be resolved only on PermissionsGuard's fallback
+		// path, which is taken when the `perm` claim is missing — and it never
+		// is. A role whose grants came from a parent therefore behaved as though
+		// it had none.
+		it('includes permissions inherited from a parent role', async () => {
+			roleHierarchy.getInheritedPermissions.mockResolvedValue(
+				new Set(['perm-inherited'])
+			);
+			prisma.permission.findMany.mockResolvedValue([
+				{ identifier: 'reports:read' },
+			]);
+
+			await service.generateSession(safeUser as never, 'web');
+
+			expect(jwtService.sign).toHaveBeenCalledWith(
+				expect.objectContaining({
+					perm: expect.arrayContaining(['reports:read']),
+				})
+			);
+		});
+
+		it('skips the identifier lookup when nothing is inherited', async () => {
+			await service.generateSession(safeUser as never, 'web');
+
+			expect(prisma.permission.findMany).not.toHaveBeenCalled();
 		});
 
 		it('de-duplicates a permission granted through two roles', async () => {

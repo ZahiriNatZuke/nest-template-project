@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { LoginAttemptService } from '@app/core/services/login-attempt/login-attempt.service';
 import { PrismaService } from '@app/core/services/prisma/prisma.service';
+import { RoleHierarchyService } from '@app/core/services/role-hierarchy/role-hierarchy.service';
 import { SafeUser, ValidatedUser } from '@app/core/types/app-request';
 import { envs } from '@app/env';
 import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
@@ -27,7 +28,8 @@ export class AuthService {
 		private jwtService: JwtService,
 		private userMapper: UserMapper,
 		private loginAttemptService: LoginAttemptService,
-		private tokenBlacklist: TokenBlacklistService
+		private tokenBlacklist: TokenBlacklistService,
+		private roleHierarchyService: RoleHierarchyService
 	) {}
 
 	async validateUser(
@@ -307,15 +309,47 @@ export class AuthService {
 		});
 	}
 
-	/** Flattens every permission reachable through the user's roles. */
+	/**
+	 * Flattens every permission reachable through the user's roles, following
+	 * the role hierarchy.
+	 *
+	 * This used to read only the permissions attached directly to each role,
+	 * which meant role inheritance never reached the token. PermissionsGuard
+	 * does resolve the hierarchy — but only on its fallback path, taken when the
+	 * `perm` claim is absent, and the claim is always present. So a role whose
+	 * grants came from a parent behaved as though it had none, and the feature
+	 * was effectively dead.
+	 *
+	 * RoleHierarchyService returns permission ids and guards against cycles, so
+	 * the identifiers are looked up in one query afterwards.
+	 */
 	private async resolvePermissions(userId: string): Promise<string[]> {
 		const userRoles = await this.getUserRolesWithPermissions(userId);
+
+		const direct = userRoles.flatMap(ur =>
+			ur.role.rolePermissions.map(rp => rp.permission.identifier)
+		);
+
+		const inheritedIds = new Set<string>();
+		for (const ur of userRoles) {
+			for (const id of await this.roleHierarchyService.getInheritedPermissions(
+				ur.role.id
+			)) {
+				inheritedIds.add(id);
+			}
+		}
+
+		if (inheritedIds.size === 0) {
+			return Array.from(new Set(direct));
+		}
+
+		const inherited = await this.prisma.permission.findMany({
+			where: { id: { in: Array.from(inheritedIds) } },
+			select: { identifier: true },
+		});
+
 		return Array.from(
-			new Set(
-				userRoles.flatMap(ur =>
-					ur.role.rolePermissions.map(rp => rp.permission.identifier)
-				)
-			)
+			new Set([...direct, ...inherited.map(p => p.identifier)])
 		);
 	}
 

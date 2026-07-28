@@ -27,6 +27,12 @@ import { TokenBlacklistService } from './services/token-blacklist.service';
 		AuthService,
 		PasswordService,
 		TokenBlacklistService,
+		// String alias for the lazy lookups in RoleService and UserService, which
+		// resolve this through `moduleRef.get('TokenBlacklistService')` to avoid
+		// importing auth into a cycle. The token was never registered, so those
+		// lookups threw and every call site that invalidates sessions after a
+		// role change answered 500. `useExisting` shares the one instance.
+		{ provide: 'TokenBlacklistService', useExisting: TokenBlacklistService },
 		LocalStrategy,
 		JwtStrategy,
 		PermissionsGuard,
@@ -61,6 +67,7 @@ import { TokenBlacklistService } from './services/token-blacklist.service';
 		AuthService,
 		PasswordService,
 		TokenBlacklistService,
+		'TokenBlacklistService',
 		VerifyJwtGuard,
 		PermissionsGuard,
 		// Exportar nuevos servicios y guards para uso en otros módulos
