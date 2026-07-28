@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { AuditService } from '@app/core/services/audit/audit.service';
 import { ChangeLogService } from '@app/core/services/change-log/changelog.service';
 import { PrismaService } from '@app/core/services/prisma/prisma.service';
+import { BCRYPT_COST } from '@app/core/utils/bcrypt';
 import { ZodValidationException } from '@app/core/utils/zod';
 import { CreateUserZodDto } from '@app/modules/user/dto/create-user.dto';
 import { UpdateUserZodDto } from '@app/modules/user/dto/update-user.dto';
@@ -126,7 +127,7 @@ export class UserService {
 
 	private async createUser(payload: CreateUserZodDto) {
 		const { password, ...input } = payload;
-		const pwd = await bcrypt.hash(password, bcrypt.genSaltSync(16));
+		const pwd = await bcrypt.hash(password, BCRYPT_COST);
 		const confirmationToken = randomUUID();
 		const confirmationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
 		const userRole = await this.prisma.role.findUniqueOrThrow({

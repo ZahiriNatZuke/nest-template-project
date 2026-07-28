@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { PrismaService } from '@app/core/services/prisma/prisma.service';
+import { BCRYPT_COST } from '@app/core/utils/bcrypt';
 import { ZodValidationException } from '@app/core/utils/zod';
 import { CreateApiKeyZodDto } from '@app/modules/api-key/dto/create-api-key.dto';
 import { Injectable } from '@nestjs/common';
@@ -58,7 +59,7 @@ export class ApiKeyService {
 	}> {
 		try {
 			const plainKey = randomBytes(64).toString('base64');
-			const keyHash = await bcrypt.hash(plainKey, bcrypt.genSaltSync(12));
+			const keyHash = await bcrypt.hash(plainKey, BCRYPT_COST);
 
 			const apiKey = await this.prisma.apiKey.create({
 				data: {

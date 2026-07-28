@@ -1,3 +1,4 @@
+import { randomInt } from 'node:crypto';
 import { PrismaService } from '@app/core/services/prisma/prisma.service';
 import { envs } from '@app/env';
 import { Injectable, Logger } from '@nestjs/common';
@@ -5,6 +6,10 @@ import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { generateSecret, OTP } from 'otplib';
 import * as qrcode from 'qrcode';
+
+/** Excludes 0/O and 1/I/L, which are misread when a code is copied by hand. */
+const BACKUP_CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+const BACKUP_CODE_LENGTH = 8;
 
 @Injectable()
 export class TwoFactorService {
@@ -133,13 +138,28 @@ export class TwoFactorService {
 	 * Generate backup codes
 	 */
 	generateBackupCodes(count = 10): string[] {
-		const codes: string[] = [];
-		for (let i = 0; i < count; i++) {
-			// Generate 8-character alphanumeric codes
-			const code = Math.random().toString(36).substring(2, 10).toUpperCase();
-			codes.push(code);
+		// A backup code bypasses the second factor outright, so it has to come
+		// from a CSPRNG. This used to be
+		// `Math.random().toString(36).substring(2, 10)`, which is neither: V8's
+		// generator is predictable from enough observed output, and slicing a
+		// float's base-36 expansion also produced codes shorter than 8
+		// characters when the expansion happened to be short.
+		//
+		// `randomInt` is rejection-sampled, so indexing a 32-character alphabet
+		// with it stays uniform — 40 bits per code. The alphabet drops the
+		// characters people confuse when copying a code down by hand: 0/O, 1/I/L.
+		const codes = new Set<string>();
+
+		while (codes.size < count) {
+			let code = '';
+			for (let i = 0; i < BACKUP_CODE_LENGTH; i++) {
+				code += BACKUP_CODE_ALPHABET[randomInt(BACKUP_CODE_ALPHABET.length)];
+			}
+			// A repeat would be one fewer usable code than the caller asked for.
+			codes.add(code);
 		}
-		return codes;
+
+		return Array.from(codes);
 	}
 
 	/**

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '@app/core/services/prisma/prisma.service';
+import { BCRYPT_COST } from '@app/core/utils/bcrypt';
 import { ZodValidationException } from '@app/core/utils/zod';
 import { envs } from '@app/env';
 import { ConfirmEmailZodDto } from '@app/modules/auth/dto/confirm-email.dto';
@@ -66,10 +67,7 @@ export class PasswordService {
 			throw validationError('Passwords not match');
 		}
 
-		const newPassword = await bcrypt.hash(
-			dto.new_password,
-			bcrypt.genSaltSync(16)
-		);
+		const newPassword = await bcrypt.hash(dto.new_password, BCRYPT_COST);
 
 		await this.tokenBlacklist.invalidateAllUserSessions(user.id);
 
@@ -96,7 +94,7 @@ export class PasswordService {
 			return this.prisma.user.update({
 				where: { id: userDb.id },
 				data: {
-					password: await bcrypt.hash(newPassword, bcrypt.genSaltSync(16)),
+					password: await bcrypt.hash(newPassword, BCRYPT_COST),
 				},
 			});
 		} catch (_) {
@@ -192,10 +190,7 @@ export class PasswordService {
 			throw validationError('Invalid or expired reset token');
 		}
 
-		const newPassword = await bcrypt.hash(
-			dto.newPassword,
-			bcrypt.genSaltSync(16)
-		);
+		const newPassword = await bcrypt.hash(dto.newPassword, BCRYPT_COST);
 
 		await this.prisma.user.update({
 			where: { id: user.id },
