@@ -10,24 +10,16 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  # The pnpm version lives in package.json's `packageManager` field, which
-  # corepack reads on the runner, in Docker and on a developer machine alike.
-  # It used to be pinned here and nowhere else, so CI ran 10.33 while a local
-  # corepack picked up whatever was newest — which is how a lockfile written by
-  # one version came to be rejected by another.
-  #
-  # prisma.config.ts resolves `env('DATABASE_URL')` eagerly and throws when it
-  # is unset, so every Prisma CLI invocation needs it present — including
-  # `generate` and `validate`, which never open a connection. Without a .env
-  # file on the runner, the first `prisma generate` fails with
-  # PrismaConfigEnvError before anything else can run.
-  #
-  # Set at workflow level so both jobs inherit it. The e2e job talks to a real
-  # PostgreSQL at this address; the quality job only needs the variable to
-  # exist and never connects.
-  DATABASE_URL: postgresql://postgres:postgres@localhost:5433/nest_template_test?schema=public
-
+# The pnpm version lives in package.json's `packageManager` field, which
+# corepack reads on the runner, in Docker and on a developer machine alike. It
+# used to be pinned here and nowhere else, so CI ran 10.33 while a local
+# corepack picked up whatever was newest — which is how a lockfile written by
+# one version came to be rejected by another.
+#
+# DATABASE_URL is no longer set workflow-wide. prisma.config.ts now reads the
+# variable directly instead of through prisma's eager `env()` helper, so
+# `generate` and `validate` — neither of which opens a connection — run without
+# it. Only the e2e job, which talks to a real database, declares it.
 jobs:
   quality:
     name: Lint, typecheck and unit tests
@@ -76,6 +68,11 @@ jobs:
   e2e:
     name: End-to-end tests
     runs-on: ubuntu-latest
+
+    env:
+      # Matches .env.test and docker-compose.test.yml, so the suite runs
+      # identically here and locally.
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5433/nest_template_test?schema=public
 
     services:
       postgres:
