@@ -1,0 +1,10 @@
+# Revisión por defecto de todo el repositorio. Con una regla de rama que exija revisión, esto
+# asigna el PR automáticamente.
+# Ver https://docs.github.com/articles/about-code-owners
+* @ZahiriNatZuke
+
+# Superficie sensible: lo que corre con el token del workflow, la política de seguridad y el
+# esquema de datos.
+/.github/workflows/ @ZahiriNatZuke
+/SECURITY.md @ZahiriNatZuke
+/prisma/ @ZahiriNatZuke
