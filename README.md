@@ -137,7 +137,7 @@ Decisiones fijadas por test, para que un cambio futuro sea deliberado:
 ## Limitaciones conocidas
 - Las notificaciones y alertas de seguridad se entregan a través de `NotificationPort`, cuya única implementación registra por log. Cambia el `useClass` por tu proveedor al adoptar el template.
 - La imagen de runtime ronda los 300 MB; los engines de Prisma dominan el tamaño.
-- TypeScript está fijado por debajo de la 6 en Dependabot: migrar exige quitar `baseUrl` y tipar los bindings de `catch`.
+- TypeScript está fijado por debajo de la 6 en Dependabot, y el bloqueo no está en este repositorio. Medido contra 6.0.3 y 7.0.2: `@prisma/client/index.d.ts` es un `export * from '.prisma/client/default'` que ninguno de los dos compiladores resuelve, así que el módulo sale vacío y `PrismaService` pierde todos sus delegados — unos 296 errores repartidos por casi todos los servicios, que ninguna opción de `tsconfig` corrige. Los ajustes de configuración (quitar `baseUrl`, `paths` con `./`, `"types": ["node", "jest"]`, dos bindings de `catch`) son la parte fácil. Revisar cuando Prisma publique un cliente que resuelva bajo los compiladores nuevos.
 
 ## Deploy
 - Compila (`pnpm build`), aplica migraciones (`pnpm migrate:deploy`) y arranca (`pnpm start:prod`). Con Docker, `MIGRATE_ON_BOOT=true` hace el segundo paso por ti.

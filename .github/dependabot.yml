@@ -31,11 +31,34 @@ updates:
           - 'ts-node'
           - 'typescript'
     ignore:
-      # TypeScript is held at 5.x. Verified against 6.0.3: `baseUrl` becomes a
-      # deprecation *error* needing `ignoreDeprecations`, and the tighter
-      # `catch` typing turns `e` into `unknown`, breaking verify-jwt.guard.ts
-      # and password.service.ts. Raising this needs a migration commit, not a
-      # version bump — see the note in the README before changing it.
+      # TypeScript is held at 5.x, and the blocker is not in this repository.
+      #
+      # Measured against 6.0.3 and 7.0.2 — 6.x is a superseded bridge release,
+      # so 7.0.2 is what the bump would actually mean today. Both land on the
+      # same wall: `@prisma/client/index.d.ts` is one line,
+      # `export * from '.prisma/client/default'`, and neither compiler resolves
+      # that specifier. The module comes back empty, so `PrismaClient` and
+      # `Prisma` read as "not exported" and PrismaService loses every model
+      # delegate — ~296 errors spread across almost every service. No tsconfig
+      # option moves it: `moduleResolution` at node10 and at nodenext give the
+      # identical count. It needs Prisma to emit a client the new resolver
+      # accepts, or this project to move the generator to a custom `output` and
+      # rewrite every `@prisma/client` import.
+      #
+      # The config work is the small part and is fully known:
+      #   - 6.0.3 wants `"ignoreDeprecations": "6.0"` for `baseUrl`; 7.0.2
+      #     removes `baseUrl` outright, with no escape hatch, so `paths` need a
+      #     leading `./`.
+      #   - `@types/*` stop being discovered automatically; an explicit
+      #     `"types": ["node", "jest"]` is required.
+      #   - `catch` bindings narrow to `unknown`: two errors, in
+      #     verify-jwt.guard.ts and password.service.ts.
+      #
+      # NestJS is not the constraint — @nestjs/schematics asks for
+      # `typescript >=4.8.2`, which both majors satisfy.
+      #
+      # Recheck when Prisma ships a client that resolves under the new
+      # compilers; until then a version bump only turns CI red.
       - dependency-name: typescript
         versions: ['>=6']
 
