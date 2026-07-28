@@ -67,10 +67,7 @@ export class PasswordService {
 			throw validationError('Passwords not match');
 		}
 
-		const newPassword = await bcrypt.hash(
-			dto.new_password,
-			BCRYPT_COST
-		);
+		const newPassword = await bcrypt.hash(dto.new_password, BCRYPT_COST);
 
 		await this.tokenBlacklist.invalidateAllUserSessions(user.id);
 
@@ -193,10 +190,7 @@ export class PasswordService {
 			throw validationError('Invalid or expired reset token');
 		}
 
-		const newPassword = await bcrypt.hash(
-			dto.newPassword,
-			BCRYPT_COST
-		);
+		const newPassword = await bcrypt.hash(dto.newPassword, BCRYPT_COST);
 
 		await this.prisma.user.update({
 			where: { id: user.id },
