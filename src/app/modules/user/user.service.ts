@@ -6,7 +6,12 @@ import { BCRYPT_COST } from '@app/core/utils/bcrypt';
 import { ZodValidationException } from '@app/core/utils/zod';
 import { CreateUserZodDto } from '@app/modules/user/dto/create-user.dto';
 import { UpdateUserZodDto } from '@app/modules/user/dto/update-user.dto';
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import {
+	HttpException,
+	HttpStatus,
+	Injectable,
+	NotFoundException,
+} from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { Prisma, User } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
@@ -91,8 +96,31 @@ export class UserService {
 		return updated;
 	}
 
+	/**
+	 * Resolves a user for an operation that has no pipe in front of it.
+	 *
+	 * Deliberately does not filter on `deletedAt`: `restore` works on rows that
+	 * are soft-deleted by definition.
+	 *
+	 * The uuid is checked here rather than left to the database. Postgres
+	 * rejects a malformed uuid with a driver error, and neither that nor
+	 * `findUniqueOrThrow`'s rejection is an HttpException — the global filter
+	 * can only render them as 500. A genuine database failure still propagates,
+	 * which is why this validates instead of catching.
+	 */
+	private async findForMutation(
+		where: Prisma.UserWhereUniqueInput
+	): Promise<User> {
+		if (typeof where.id === 'string' && !z.uuid().safeParse(where.id).success)
+			throw new NotFoundException('User not found');
+
+		const user = await this.prisma.user.findUnique({ where });
+		if (!user) throw new NotFoundException('User not found');
+		return user;
+	}
+
 	async delete(where: Prisma.UserWhereUniqueInput): Promise<User> {
-		const before = await this.prisma.user.findUniqueOrThrow({ where });
+		const before = await this.findForMutation(where);
 		const user = await this.prisma.user.update({
 			where,
 			data: { deletedAt: new Date() },
@@ -109,7 +137,7 @@ export class UserService {
 	}
 
 	async restore(where: Prisma.UserWhereUniqueInput): Promise<User> {
-		const before = await this.prisma.user.findUniqueOrThrow({ where });
+		const before = await this.findForMutation(where);
 		const user = await this.prisma.user.update({
 			where,
 			data: { deletedAt: null },
@@ -180,12 +208,25 @@ export class UserService {
 		}
 	}
 
+	/** Same reasoning as findForMutation, for the role side of the join. */
+	private async findRoleOrThrow(roleId: string): Promise<{ id: string }> {
+		if (!z.uuid().safeParse(roleId).success)
+			throw new NotFoundException('Role not found');
+
+		const role = await this.prisma.role.findUnique({
+			where: { id: roleId },
+			select: { id: true },
+		});
+		if (!role) throw new NotFoundException('Role not found');
+		return role;
+	}
+
 	async assignRole(userId: string, roleId: string): Promise<User> {
 		// Verificar que el usuario existe
-		await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+		await this.findForMutation({ id: userId });
 
 		// Verificar que el rol existe
-		await this.prisma.role.findUniqueOrThrow({ where: { id: roleId } });
+		await this.findRoleOrThrow(roleId);
 
 		// Crear la relación si no existe
 		await this.prisma.userRole.upsert({
@@ -226,9 +267,17 @@ export class UserService {
 
 	async removeRole(userId: string, roleId: string): Promise<User> {
 		// Verificar que el usuario existe
-		await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+		await this.findForMutation({ id: userId });
+		await this.findRoleOrThrow(roleId);
 
-		// Eliminar la relación
+		// Eliminar la relación. Que el rol exista no implica que este usuario lo
+		// tenga, y borrar una fila ausente es el mismo 500 que todo lo demás.
+		const assignment = await this.prisma.userRole.findUnique({
+			where: { userId_roleId: { userId, roleId } },
+		});
+		if (!assignment)
+			throw new NotFoundException('User does not hold that role');
+
 		await this.prisma.userRole.delete({
 			where: {
 				userId_roleId: {

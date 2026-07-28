@@ -147,6 +147,86 @@ describe('Roles and permissions (e2e)', () => {
 		});
 	});
 
+	/**
+	 * Same shape as the user routes: `:id` and `:permissionId` arrive with no
+	 * pipe in front of them and went straight to `findUniqueOrThrow`, whose
+	 * rejection is not an HttpException — so a missing row and a malformed id
+	 * both came back as 500 rather than 404.
+	 */
+	describe('addressing something that is not there', () => {
+		const missing = '3f8f1a52-0000-4000-8000-000000000000';
+
+		it('answers 404 when assigning to a role that does not exist', async () => {
+			const auth = await loginAdmin();
+			const permission = await prisma.permission.create({
+				data: {
+					resource: 'reports',
+					action: 'read',
+					identifier: 'reports:read',
+				},
+			});
+
+			await http()
+				.post(`${API}/role/${missing}/permissions`)
+				.set(auth.headers)
+				.set('Cookie', auth.cookie)
+				.send({ permissionId: permission.id })
+				.expect(404);
+		});
+
+		it('answers 404 when assigning a permission that does not exist', async () => {
+			const auth = await loginAdmin();
+			const role = await prisma.role.create({
+				data: { identifier: 'AUDITOR_ROLE', name: 'Auditor' },
+			});
+
+			await http()
+				.post(`${API}/role/${role.id}/permissions`)
+				.set(auth.headers)
+				.set('Cookie', auth.cookie)
+				.send({ permissionId: missing })
+				.expect(404);
+		});
+
+		it('answers 404 when detaching a permission the role does not hold', async () => {
+			const auth = await loginAdmin();
+			const role = await prisma.role.create({
+				data: { identifier: 'AUDITOR_ROLE', name: 'Auditor' },
+			});
+			const permission = await prisma.permission.create({
+				data: {
+					resource: 'reports',
+					action: 'read',
+					identifier: 'reports:read',
+				},
+			});
+
+			await http()
+				.delete(`${API}/role/${role.id}/permissions/${permission.id}`)
+				.set(auth.headers)
+				.set('Cookie', auth.cookie)
+				.expect(404);
+		});
+
+		it('answers 404 for a roleId that is not a UUID', async () => {
+			const auth = await loginAdmin();
+			const permission = await prisma.permission.create({
+				data: {
+					resource: 'reports',
+					action: 'read',
+					identifier: 'reports:read',
+				},
+			});
+
+			await http()
+				.post(`${API}/role/garbage/permissions`)
+				.set(auth.headers)
+				.set('Cookie', auth.cookie)
+				.send({ permissionId: permission.id })
+				.expect(404);
+		});
+	});
+
 	describe('permission administration', () => {
 		it('creates a permission', async () => {
 			const auth = await loginAdmin();

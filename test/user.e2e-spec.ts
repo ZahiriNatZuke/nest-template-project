@@ -587,6 +587,112 @@ describe('User administration (e2e)', () => {
 		});
 	});
 
+	/**
+	 * Four handlers take the id straight off the URL with no pipe in front of
+	 * them — `delete`, `restore` and the two role routes — and used to hand it
+	 * to Prisma unchecked. A missing row made `findUniqueOrThrow` throw, a
+	 * malformed id made Postgres reject the uuid cast, and neither is an
+	 * HttpException, so the global filter rendered both as 500.
+	 *
+	 * `GET /user/:id` has answered 404 for exactly these inputs all along,
+	 * through FindUserByIdPipe. The routes without a pipe are the odd ones out.
+	 */
+	describe('addressing something that is not there', () => {
+		const missing = '3f8f1a52-0000-4000-8000-000000000000';
+
+		it('answers 404 when deleting a user that does not exist', async () => {
+			const auth = await loginAdmin();
+
+			await http()
+				.delete(`${API}/user/${missing}`)
+				.set(auth.headers)
+				.set('Cookie', auth.cookie)
+				.expect(404);
+		});
+
+		it('answers 404 when deleting an id that is not a UUID', async () => {
+			const auth = await loginAdmin();
+
+			await http()
+				.delete(`${API}/user/garbage`)
+				.set(auth.headers)
+				.set('Cookie', auth.cookie)
+				.expect(404);
+		});
+
+		it('answers 404 when restoring a user that does not exist', async () => {
+			const auth = await loginAdmin();
+
+			await http()
+				.patch(`${API}/user/${missing}/restore`)
+				.set(auth.headers)
+				.set('Cookie', auth.cookie)
+				.expect(404);
+		});
+
+		it('answers 404 when assigning a role to a user that does not exist', async () => {
+			const auth = await loginAdmin();
+
+			await http()
+				.post(`${API}/user/${missing}/roles`)
+				.set(auth.headers)
+				.set('Cookie', auth.cookie)
+				.send({ roleId: fixtures.adminRoleId })
+				.expect(404);
+		});
+
+		it('answers 404 when assigning a role that does not exist', async () => {
+			const auth = await loginAdmin();
+
+			await http()
+				.post(`${API}/user/${fixtures.plainUser.id}/roles`)
+				.set(auth.headers)
+				.set('Cookie', auth.cookie)
+				.send({ roleId: missing })
+				.expect(404);
+		});
+
+		it('answers 404 when removing a role the user does not hold', async () => {
+			const auth = await loginAdmin();
+
+			await http()
+				.delete(
+					`${API}/user/${fixtures.plainUser.id}/roles/${fixtures.adminRoleId}`
+				)
+				.set(auth.headers)
+				.set('Cookie', auth.cookie)
+				.expect(404);
+		});
+
+		it('answers 404 when removing a roleId that is not a UUID', async () => {
+			const auth = await loginAdmin();
+
+			await http()
+				.delete(`${API}/user/${fixtures.plainUser.id}/roles/garbage`)
+				.set(auth.headers)
+				.set('Cookie', auth.cookie)
+				.expect(404);
+		});
+
+		it('leaves the user untouched when the role lookup fails', async () => {
+			const auth = await loginAdmin();
+
+			await http()
+				.post(`${API}/user/${fixtures.plainUser.id}/roles`)
+				.set(auth.headers)
+				.set('Cookie', auth.cookie)
+				.send({ roleId: missing })
+				.expect(404);
+
+			// Only the role seeded for this user, nothing half-written.
+			const rows = await prisma.userRole.findMany({
+				where: { userId: fixtures.plainUser.id },
+			});
+			expect(rows).toHaveLength(1);
+			expect(rows[0].roleId).toBe(fixtures.userRoleId);
+		});
+	});
+
 	describe('authorization', () => {
 		it('denies a user without users:read', async () => {
 			const auth = await loginPlain();
