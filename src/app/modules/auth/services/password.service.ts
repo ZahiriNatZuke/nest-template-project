@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '@app/core/services/prisma/prisma.service';
+import { BCRYPT_COST } from '@app/core/utils/bcrypt';
 import { ZodValidationException } from '@app/core/utils/zod';
 import { envs } from '@app/env';
 import { ConfirmEmailZodDto } from '@app/modules/auth/dto/confirm-email.dto';
@@ -68,7 +69,7 @@ export class PasswordService {
 
 		const newPassword = await bcrypt.hash(
 			dto.new_password,
-			bcrypt.genSaltSync(16)
+			BCRYPT_COST
 		);
 
 		await this.tokenBlacklist.invalidateAllUserSessions(user.id);
@@ -96,7 +97,7 @@ export class PasswordService {
 			return this.prisma.user.update({
 				where: { id: userDb.id },
 				data: {
-					password: await bcrypt.hash(newPassword, bcrypt.genSaltSync(16)),
+					password: await bcrypt.hash(newPassword, BCRYPT_COST),
 				},
 			});
 		} catch (_) {
@@ -194,7 +195,7 @@ export class PasswordService {
 
 		const newPassword = await bcrypt.hash(
 			dto.newPassword,
-			bcrypt.genSaltSync(16)
+			BCRYPT_COST
 		);
 
 		await this.prisma.user.update({

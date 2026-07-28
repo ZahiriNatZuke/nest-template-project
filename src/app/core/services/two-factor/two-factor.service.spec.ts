@@ -233,6 +233,28 @@ describe('TwoFactorService', () => {
 				expect(code).toMatch(/^[0-9A-Z]+$/);
 			}
 		});
+
+		// The previous implementation sliced `Math.random().toString(36)`, which
+		// yielded a shorter code whenever the float's base-36 expansion was
+		// short — about twice in every hundred thousand.
+		it('always produces codes of exactly eight characters', () => {
+			for (const code of service.generateBackupCodes(200)) {
+				expect(code).toHaveLength(8);
+			}
+		});
+
+		// These codes bypass the second factor, so the alphabet is fixed
+		// deliberately: no 0/O and no 1/I/L, which get misread off a printout.
+		it('omits the characters that are confused when copied by hand', () => {
+			for (const code of service.generateBackupCodes(200)) {
+				expect(code).not.toMatch(/[01OIL]/);
+			}
+		});
+
+		it('never repeats a code within one batch', () => {
+			const codes = service.generateBackupCodes(50);
+			expect(new Set(codes).size).toBe(codes.length);
+		});
 	});
 
 	describe('verifyBackupCode', () => {
