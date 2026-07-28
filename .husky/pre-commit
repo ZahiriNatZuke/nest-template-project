@@ -1,2 +1,40 @@
 #!/usr/bin/env sh
-pnpm run precommit
+#
+# Formats and lints what is about to be committed, then re-stages it.
+#
+# This used to call `pnpm run precommit`, which runs `biome check --fix` over
+# the whole project. Two problems came out of that:
+#
+#   1. It never re-staged what it rewrote. The fix landed in the working tree
+#      while the commit kept the unformatted version — invisible locally, since
+#      `biome ci` reads the working tree and passes, and caught only by CI,
+#      which checks out the commit. That is exactly how a red pipeline got
+#      pushed.
+#   2. Running over the whole project rewrote files that had nothing to do with
+#      the commit, including ones belonging to other branches.
+#
+# `--staged` restricts Biome to the staged entries; re-adding them afterwards
+# is what makes the commit match what was checked.
+
+set -e
+
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
+
+if [ -z "$staged" ]; then
+	exit 0
+fi
+
+# `--no-errors-on-unmatched` and `--files-ignore-unknown` keep Biome from
+# failing the commit when nothing staged is a file it handles — a commit that
+# only touches a shell script or a migration would otherwise be rejected.
+pnpm exec biome check --staged --fix --unsafe \
+	--no-errors-on-unmatched \
+	--files-ignore-unknown=true
+
+# Only re-add paths that still exist: `--fix` never deletes, but a path staged
+# as a rename source would otherwise fail here.
+echo "$staged" | while IFS= read -r file; do
+	if [ -f "$file" ]; then
+		git add -- "$file"
+	fi
+done
