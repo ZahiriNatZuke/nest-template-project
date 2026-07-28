@@ -59,6 +59,11 @@ export class UserController {
 		@Query('querySearch', TrimQuerySearchPipe) querySearch: string
 	) {
 		const { take, page, url } = pagination;
+		// `mode: 'insensitive'` is what makes this filter usable at all.
+		// TrimQuerySearchPipe lowercases the term it is handed, while Postgres
+		// `contains` compiles to a case-sensitive LIKE — so a plain `contains`
+		// only ever matched rows that happened to be stored in lower case.
+		// Searching the seeded admin, "E2E Admin", returned an empty list.
 		const paginationUser: UserPagination = {
 			orderBy: { createdAt: 'asc' },
 			take,
@@ -68,16 +73,19 @@ export class UserController {
 					{
 						fullName: {
 							contains: querySearch,
+							mode: 'insensitive',
 						},
 					},
 					{
 						email: {
 							contains: querySearch,
+							mode: 'insensitive',
 						},
 					},
 					{
 						username: {
 							contains: querySearch,
+							mode: 'insensitive',
 						},
 					},
 				],

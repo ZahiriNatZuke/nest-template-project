@@ -272,6 +272,46 @@ describe('User administration (e2e)', () => {
 			expect(res.body.data[0].username).toBe('unrelated_handle');
 		});
 
+		/**
+		 * TrimQuerySearchPipe lowercases whatever it is handed, and Postgres
+		 * `contains` is case-sensitive — so before the `mode: 'insensitive'`
+		 * that now sits on these three filters, a search only ever matched rows
+		 * that happened to be stored in lower case. The seeded admin is called
+		 * "E2E Admin" and searching for it returned an empty list.
+		 */
+		it('finds a user whose stored name is not lower case', async () => {
+			const auth = await loginAdmin();
+
+			const res = await http()
+				.get(`${API}/user?querySearch=E2E Admin`)
+				.set(auth.headers)
+				.set('Cookie', auth.cookie)
+				.expect(200);
+
+			expect(res.body.data).toHaveLength(1);
+			expect(res.body.data[0].email).toBe(fixtures.adminUser.email);
+		});
+
+		it('ignores the case of the search term itself', async () => {
+			const auth = await loginAdmin();
+			await seedUser({
+				email: 'Casing@e2e.local',
+				username: 'CasedHandle',
+				fullName: 'Cased Person',
+			});
+
+			for (const term of ['CasedHandle', 'casedhandle', 'CASEDHANDLE']) {
+				const res = await http()
+					.get(`${API}/user?querySearch=${term}`)
+					.set(auth.headers)
+					.set('Cookie', auth.cookie)
+					.expect(200);
+
+				expect(res.body.data).toHaveLength(1);
+				expect(res.body.data[0].username).toBe('CasedHandle');
+			}
+		});
+
 		it('returns nothing when the search matches nothing', async () => {
 			const auth = await loginAdmin();
 
