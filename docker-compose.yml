@@ -4,6 +4,15 @@
 #
 # Copy .env.template to .env first — the api service reads it via `env_file`,
 # and the app refuses to boot if any required variable is missing.
+#
+# Both published ports default to the usual ones, which collide with anything
+# already listening: a PostgreSQL on 5432 or another service on 3000 will make
+# the stack fail to start. Override them rather than stopping what is running:
+#
+#   POSTGRES_PORT=5434 PORT=3100 docker compose up --build
+#
+# The api service reaches the database over the compose network, so publishing
+# the database port is only for connecting your own SQL client to it.
 
 services:
   postgres:
@@ -40,6 +49,9 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-admin123}@postgres:5432/${POSTGRES_DB:-dev_db}?schema=public
       HOST: ${HOST:-localhost}
       PORT: 3000
+      # One container owns this database, so letting it migrate on boot is
+      # safe here. With several replicas, run the migration as its own step.
+      MIGRATE_ON_BOOT: ${MIGRATE_ON_BOOT:-true}
     ports:
       - '${PORT:-3000}:3000'
     depends_on:
