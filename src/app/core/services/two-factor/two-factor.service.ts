@@ -1,4 +1,5 @@
 import { randomInt } from 'node:crypto';
+import { EncryptionService } from '@app/core/services/encryption/encryption.service';
 import { PrismaService } from '@app/core/services/prisma/prisma.service';
 import { envs } from '@app/env';
 import { Injectable, Logger } from '@nestjs/common';
@@ -17,7 +18,71 @@ export class TwoFactorService {
 	private readonly appName = envs.APP_NAME || 'NestApp';
 	private readonly otp = new OTP();
 
-	constructor(private prisma: PrismaService) {}
+	constructor(
+		private prisma: PrismaService,
+		private encryption: EncryptionService
+	) {}
+
+	/**
+	 * Turns a stored `twoFactorSecret` back into the base32 secret otplib needs.
+	 *
+	 * Secrets used to be written in plaintext, so rows predating encryption stay
+	 * readable: `isEncrypted` tells them apart by shape, and a base32 secret
+	 * never contains the `:` separator the ciphertext format uses. That makes
+	 * this backwards compatible without a migration script — see
+	 * `reencryptSecretIfPlaintext`, which upgrades a row once its owner has
+	 * successfully authenticated.
+	 */
+	async resolveSecret(storedSecret: string): Promise<string> {
+		if (!this.encryption.isEncrypted(storedSecret)) {
+			return storedSecret;
+		}
+		return this.encryption.decrypt(storedSecret);
+	}
+
+	/**
+	 * Verifies a TOTP token against the secret as stored on the user row,
+	 * decrypting it first when needed.
+	 *
+	 * Prefer this over `verifyToken` from anything holding a database row:
+	 * handing the raw column to `verifyToken` silently fails once the value is
+	 * encrypted, and nothing in the type system would say so.
+	 */
+	async verifyStoredToken(
+		token: string,
+		storedSecret: string
+	): Promise<boolean> {
+		return this.verifyToken(token, await this.resolveSecret(storedSecret));
+	}
+
+	/**
+	 * Rewrites a legacy plaintext secret as ciphertext.
+	 *
+	 * Called after a successful verification, so the migration only happens on a
+	 * path that has just proved the secret works and a failure to encrypt can
+	 * never lock someone out of their own account.
+	 */
+	async reencryptSecretIfPlaintext(
+		userId: string,
+		storedSecret: string
+	): Promise<void> {
+		if (this.encryption.isEncrypted(storedSecret)) return;
+
+		try {
+			await this.prisma.user.update({
+				where: { id: userId },
+				data: { twoFactorSecret: await this.encryption.encrypt(storedSecret) },
+			});
+			this.logger.log(`2FA secret encrypted at rest for user ${userId}`);
+		} catch (error) {
+			// Best effort: the user is authenticated either way, and the next
+			// verification will try again.
+			this.logger.error(
+				`Failed to encrypt the 2FA secret of user ${userId}`,
+				error
+			);
+		}
+	}
 
 	/**
 	 * Generate a new 2FA secret for a user
@@ -66,11 +131,15 @@ export class TwoFactorService {
 			backupCodes.map(code => bcrypt.hash(code, 10))
 		);
 
+		// Encrypted rather than hashed: TOTP verification needs the original value
+		// back, so a one-way function is not an option. Left in plaintext, a
+		// leaked database would let anyone mint valid codes for every account
+		// with 2FA on — precisely the attack 2FA exists to stop.
 		await this.prisma.user.update({
 			where: { id: userId },
 			data: {
 				twoFactorEnabled: true,
-				twoFactorSecret: secret,
+				twoFactorSecret: await this.encryption.encrypt(secret),
 				twoFactorBackupCodes: hashedBackupCodes,
 			},
 		});

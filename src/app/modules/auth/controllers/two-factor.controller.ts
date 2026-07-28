@@ -197,8 +197,10 @@ export class TwoFactorController {
 			);
 		}
 
-		// Try TOTP verification first
-		let isValid = await this.twoFactorService.verifyToken(
+		// `verifyStoredToken`, not `verifyToken`: the column holds ciphertext and
+		// needs decrypting first. Rows written before encryption are still
+		// plaintext and are handled transparently.
+		let isValid = await this.twoFactorService.verifyStoredToken(
 			body.token,
 			user.twoFactorSecret
 		);
@@ -225,6 +227,14 @@ export class TwoFactorController {
 				HttpStatus.UNAUTHORIZED
 			);
 		}
+
+		// Upgrade a legacy plaintext secret now that this request has proved it
+		// works. Doing it here rather than in a migration means no downtime and
+		// no risk of locking anyone out of their own account.
+		await this.twoFactorService.reencryptSecretIfPlaintext(
+			user.id,
+			user.twoFactorSecret
+		);
 
 		// ========== 2FA VERIFICATION SUCCESS ==========
 		// Si 2FA es requerido y se verificó correctamente, completar login
