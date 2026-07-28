@@ -1,0 +1,23 @@
+# Biome formats with `lineEnding: "lf"` and CI runs `biome ci`, which is
+# read-only and fails on a mismatch. On Windows `core.autocrlf=true` rewrites
+# the working tree to CRLF at checkout, so a fresh clone failed the lint step
+# on 45 files that CI reported as clean — a difference in the checkout, not in
+# the code.
+#
+# Normalising here makes the checkout match what Biome and CI expect,
+# regardless of the contributor's platform or git configuration.
+* text=auto eol=lf
+
+# Binary assets git must never touch.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
+
+# Generated: keep it out of diffs and out of language statistics.
+pnpm-lock.yaml -diff linguist-generated=true
