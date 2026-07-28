@@ -136,7 +136,7 @@ Decisiones fijadas por test, para que un cambio futuro sea deliberado:
 
 ## Limitaciones conocidas
 - Las notificaciones y alertas de seguridad se entregan a través de `NotificationPort`, cuya única implementación registra por log. Cambia el `useClass` por tu proveedor al adoptar el template.
-- La imagen de runtime pesa alrededor de 1,5 GB; los engines de Prisma dominan el tamaño.
+- La imagen de runtime ronda los 300 MB; los engines de Prisma dominan el tamaño.
 - TypeScript está fijado por debajo de la 6 en Dependabot: migrar exige quitar `baseUrl` y tipar los bindings de `catch`.
 
 ## Deploy
