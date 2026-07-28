@@ -11,7 +11,6 @@ import { UpdatePasswordZodDto } from '@app/modules/auth/dto/update-password.dto'
 import { Injectable, Logger } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
-import { User } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { pick } from 'lodash';
 import { z } from 'zod';
@@ -49,12 +48,17 @@ export class PasswordService {
 	 * usual response to a suspected compromise, so leaving other devices signed
 	 * in would defeat the point.
 	 */
-	async updatePassword(dto: UpdatePasswordZodDto, user: User) {
+	async updatePassword(dto: UpdatePasswordZodDto, user: { id: string }) {
 		const userDb = await this.prisma.user.findUniqueOrThrow({
 			where: { id: user.id },
 		});
 
-		if (!(await bcrypt.compare(dto.current_password, user.password))) {
+		// Compare against the row, never against the principal hanging off the
+		// request. Under JwtAuthGuard that principal is the token payload and has
+		// no `password` at all, so this used to hand bcrypt `undefined` and no
+		// caller could ever change their password. Taking only `{ id }` here
+		// keeps the next caller from reintroducing the same mistake.
+		if (!(await bcrypt.compare(dto.current_password, userDb.password))) {
 			throw validationError('Current password miss match');
 		}
 
