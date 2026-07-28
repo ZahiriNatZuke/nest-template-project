@@ -143,3 +143,7 @@ Decisiones fijadas por test, para que un cambio futuro sea deliberado:
 - Compila (`pnpm build`), aplica migraciones (`pnpm migrate:deploy`) y arranca (`pnpm start:prod`). Con Docker, `MIGRATE_ON_BOOT=true` hace el segundo paso por ti.
 - Asegura variables de entorno productivas, orígenes CORS configurados y claves secretas robustas.
 - Los logs rotan en `./logs` por día con compresión gzip (ver configuración en `LoggerModule`).
+
+## Licencia
+
+[MIT](LICENSE) © 2026 Yohan González Almaguer. Úsalo como base de tus proyectos sin pedir permiso; lo único que se te pide es conservar el aviso de copyright.
