@@ -11,8 +11,12 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # Pinned so a pnpm release cannot change CI behaviour without a commit.
-  PNPM_VERSION: 10.33.0
+  # The pnpm version lives in package.json's `packageManager` field, which
+  # corepack reads on the runner, in Docker and on a developer machine alike.
+  # It used to be pinned here and nowhere else, so CI ran 10.33 while a local
+  # corepack picked up whatever was newest — which is how a lockfile written by
+  # one version came to be rejected by another.
+  #
   # prisma.config.ts resolves `env('DATABASE_URL')` eagerly and throws when it
   # is unset, so every Prisma CLI invocation needs it present — including
   # `generate` and `validate`, which never open a connection. Without a .env
@@ -32,9 +36,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # No `version:` — the action reads `packageManager` from package.json,
+      # which is the single source of truth for every environment.
       - uses: pnpm/action-setup@v6
-        with:
-          version: ${{ env.PNPM_VERSION }}
 
       - uses: actions/setup-node@v7
         with:
@@ -93,9 +97,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # No `version:` — the action reads `packageManager` from package.json,
+      # which is the single source of truth for every environment.
       - uses: pnpm/action-setup@v6
-        with:
-          version: ${{ env.PNPM_VERSION }}
 
       - uses: actions/setup-node@v7
         with:
