@@ -117,7 +117,62 @@ describe('Two-factor authentication (e2e)', () => {
 				where: { id: fixtures.adminUser.id },
 			});
 			expect(user.twoFactorEnabled).toBe(true);
-			expect(user.twoFactorSecret).toBe(secret);
+			// This used to assert the column equalled the secret. It did — in
+			// plaintext, which meant a leaked database handed an attacker working
+			// codes for every account with 2FA on. The column now holds
+			// AES-256-GCM ciphertext.
+			expect(user.twoFactorSecret).not.toBe(secret);
+			expect(user.twoFactorSecret).toEqual(expect.any(String));
+		});
+
+		it('stores the secret encrypted, and still verifies against it', async () => {
+			const setup = await authed('get', '/auth/2fa/setup').expect(200);
+			const { secret, backupCodes } = setup.body.data;
+
+			await authed('post', '/auth/2fa/enable')
+				.send({ token: await currentToken(secret), secret, backupCodes })
+				.expect(200);
+
+			const user = await prisma.user.findUniqueOrThrow({
+				where: { id: fixtures.adminUser.id },
+			});
+			// Ciphertext is salt:iv:tag:data — four base64 parts. A base32 TOTP
+			// secret has none of those separators, which is how a legacy plaintext
+			// row is told apart from an encrypted one.
+			expect((user.twoFactorSecret as string).split(':')).toHaveLength(4);
+
+			// The round trip is what matters: encryption is worthless if the user
+			// can no longer authenticate with their authenticator app.
+			await authed('post', '/auth/2fa/verify')
+				.send({ token: await currentToken(secret) })
+				.expect(200);
+		});
+
+		// Rows written before encryption existed are still plaintext. Rejecting
+		// them would lock every one of those users out of their own account.
+		it('accepts a legacy plaintext secret and upgrades it in place', async () => {
+			const setup = await authed('get', '/auth/2fa/setup').expect(200);
+			const { secret, backupCodes } = setup.body.data;
+
+			await authed('post', '/auth/2fa/enable')
+				.send({ token: await currentToken(secret), secret, backupCodes })
+				.expect(200);
+
+			// Put the row back the way the previous version would have written it.
+			await prisma.user.update({
+				where: { id: fixtures.adminUser.id },
+				data: { twoFactorSecret: secret },
+			});
+
+			await authed('post', '/auth/2fa/verify')
+				.send({ token: await currentToken(secret) })
+				.expect(200);
+
+			const after = await prisma.user.findUniqueOrThrow({
+				where: { id: fixtures.adminUser.id },
+			});
+			expect(after.twoFactorSecret).not.toBe(secret);
+			expect((after.twoFactorSecret as string).split(':')).toHaveLength(4);
 		});
 
 		// Note the asymmetry: enrolment treats a bad token as invalid input (400)

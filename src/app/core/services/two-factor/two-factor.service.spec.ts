@@ -1,3 +1,4 @@
+import { EncryptionService } from '@app/core/services/encryption/encryption.service';
 import { PrismaService } from '@app/core/services/prisma/prisma.service';
 import { Test, TestingModule } from '@nestjs/testing';
 import { Prisma } from '@prisma/client';
@@ -28,9 +29,13 @@ describe('TwoFactorService', () => {
 	beforeEach(async () => {
 		prisma = createPrismaMock();
 
+		// The real EncryptionService, not a stub: these specs assert that a
+		// secret round-trips through it, which a stub would make vacuous. It
+		// reads ENCRYPTION_SECRET from .env.test and touches nothing external.
 		const module: TestingModule = await Test.createTestingModule({
 			providers: [
 				TwoFactorService,
+				EncryptionService,
 				{ provide: PrismaService, useValue: asPrismaService(prisma) },
 			],
 		}).compile();
@@ -121,7 +126,7 @@ describe('TwoFactorService', () => {
 	});
 
 	describe('enable2FA', () => {
-		it('stores the secret and hashes every backup code', async () => {
+		it('encrypts the secret and hashes every backup code', async () => {
 			prisma.user.update.mockResolvedValue(buildUser());
 
 			await service.enable2FA({
@@ -132,14 +137,34 @@ describe('TwoFactorService', () => {
 
 			expect(mockedBcrypt.hash).toHaveBeenCalledTimes(2);
 			expect(mockedBcrypt.hash).toHaveBeenCalledWith('AAAA1111', 10);
-			expect(prisma.user.update).toHaveBeenCalledWith({
-				where: { id: USER_ID },
-				data: {
-					twoFactorEnabled: true,
-					twoFactorSecret: 'SECRET123',
-					twoFactorBackupCodes: ['hashed:AAAA1111', 'hashed:BBBB2222'],
-				},
+
+			const data = prisma.user.update.mock.calls[0][0].data;
+			expect(data.twoFactorEnabled).toBe(true);
+			expect(data.twoFactorBackupCodes).toEqual([
+				'hashed:AAAA1111',
+				'hashed:BBBB2222',
+			]);
+			// Ciphertext, not the secret. The value is salted per call, so it can
+			// only be checked by shape and by decrypting it back.
+			expect(data.twoFactorSecret).not.toBe('SECRET123');
+			await expect(
+				service.resolveSecret(data.twoFactorSecret as string)
+			).resolves.toBe('SECRET123');
+		});
+
+		it('never persists the secret in plaintext', async () => {
+			prisma.user.update.mockResolvedValue(buildUser());
+
+			await service.enable2FA({
+				userId: USER_ID,
+				secret: 'PLAINTEXTSECRET',
+				backupCodes: [],
 			});
+
+			const persisted = JSON.stringify(
+				prisma.user.update.mock.calls[0][0].data
+			);
+			expect(persisted).not.toContain('PLAINTEXTSECRET');
 		});
 
 		it('never persists a backup code in plaintext', async () => {
@@ -254,6 +279,97 @@ describe('TwoFactorService', () => {
 		it('never repeats a code within one batch', () => {
 			const codes = service.generateBackupCodes(50);
 			expect(new Set(codes).size).toBe(codes.length);
+		});
+	});
+
+	describe('secrets at rest', () => {
+		/** Generates a live TOTP via the same otplib instance the service verifies with. */
+		const currentToken = (secret: string): Promise<string> =>
+			(
+				service as unknown as {
+					otp: { generate(input: { secret: string }): Promise<string> };
+				}
+			).otp.generate({ secret });
+
+		it('round-trips an encrypted secret', async () => {
+			const secret = service.generateSecret();
+			prisma.user.update.mockResolvedValue(buildUser());
+
+			await service.enable2FA({ userId: USER_ID, secret, backupCodes: [] });
+			const stored = prisma.user.update.mock.calls[0][0].data
+				.twoFactorSecret as string;
+
+			await expect(service.resolveSecret(stored)).resolves.toBe(secret);
+		});
+
+		// Rows written before encryption existed are still plaintext. Refusing
+		// them would lock every one of those users out of their own account.
+		it('reads a legacy plaintext secret unchanged', async () => {
+			const secret = service.generateSecret();
+
+			await expect(service.resolveSecret(secret)).resolves.toBe(secret);
+		});
+
+		it('verifies a token against an encrypted secret', async () => {
+			const secret = service.generateSecret();
+			prisma.user.update.mockResolvedValue(buildUser());
+
+			await service.enable2FA({ userId: USER_ID, secret, backupCodes: [] });
+			const stored = prisma.user.update.mock.calls[0][0].data
+				.twoFactorSecret as string;
+
+			await expect(
+				service.verifyStoredToken(await currentToken(secret), stored)
+			).resolves.toBe(true);
+		});
+
+		it('verifies a token against a legacy plaintext secret', async () => {
+			const secret = service.generateSecret();
+
+			await expect(
+				service.verifyStoredToken(await currentToken(secret), secret)
+			).resolves.toBe(true);
+		});
+
+		it('rewrites a plaintext secret as ciphertext', async () => {
+			const secret = service.generateSecret();
+			prisma.user.update.mockResolvedValue(buildUser());
+
+			await service.reencryptSecretIfPlaintext(USER_ID, secret);
+
+			const written = prisma.user.update.mock.calls[0][0].data
+				.twoFactorSecret as string;
+			expect(written).not.toBe(secret);
+			await expect(service.resolveSecret(written)).resolves.toBe(secret);
+		});
+
+		it('leaves an already encrypted secret alone', async () => {
+			prisma.user.update.mockResolvedValue(buildUser());
+			await service.enable2FA({
+				userId: USER_ID,
+				secret: 'SECRET123',
+				backupCodes: [],
+			});
+			const stored = prisma.user.update.mock.calls[0][0].data
+				.twoFactorSecret as string;
+			prisma.user.update.mockClear();
+
+			await service.reencryptSecretIfPlaintext(USER_ID, stored);
+
+			// A second write would re-salt the value for no reason and cost a
+			// query on every single verification.
+			expect(prisma.user.update).not.toHaveBeenCalled();
+		});
+
+		// The user is authenticated by the time this runs, so a failure here must
+		// not surface as a failed login.
+		it('swallows a write failure while migrating', async () => {
+			const secret = service.generateSecret();
+			prisma.user.update.mockRejectedValue(new Error('database is down'));
+
+			await expect(
+				service.reencryptSecretIfPlaintext(USER_ID, secret)
+			).resolves.toBeUndefined();
 		});
 	});
 
