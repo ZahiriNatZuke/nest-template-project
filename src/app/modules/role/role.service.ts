@@ -3,7 +3,7 @@ import { PrismaService } from '@app/core/services/prisma/prisma.service';
 import { ZodValidationException } from '@app/core/utils/zod';
 import { CreateRoleZodDto } from '@app/modules/role/dto/create-role.dto';
 import { UpdateRoleZodDto } from '@app/modules/role/dto/update-role.dto';
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { Prisma, Role } from '@prisma/client';
 import { z } from 'zod';
@@ -73,16 +73,49 @@ export class RoleService {
 		return this.prisma.role.delete({ where });
 	}
 
+	/**
+	 * Resolves a role for the two routes that take `:id` with no pipe in front
+	 * of them.
+	 *
+	 * The uuid is checked here rather than left to the database: Postgres
+	 * rejects a malformed uuid with a driver error, and neither that nor
+	 * `findUniqueOrThrow`'s rejection is an HttpException — the global filter
+	 * can only render either as 500. A genuine database failure still
+	 * propagates, which is why this validates instead of catching.
+	 */
+	private async findRoleOrThrow(roleId: string): Promise<{ id: string }> {
+		if (!z.uuid().safeParse(roleId).success)
+			throw new NotFoundException('Role not found');
+
+		const role = await this.prisma.role.findUnique({
+			where: { id: roleId },
+			select: { id: true },
+		});
+		if (!role) throw new NotFoundException('Role not found');
+		return role;
+	}
+
+	/** Same, for the permission side of the join. */
+	private async findPermissionOrThrow(
+		permissionId: string
+	): Promise<{ id: string }> {
+		if (!z.uuid().safeParse(permissionId).success)
+			throw new NotFoundException('Permission not found');
+
+		const permission = await this.prisma.permission.findUnique({
+			where: { id: permissionId },
+			select: { id: true },
+		});
+		if (!permission) throw new NotFoundException('Permission not found');
+		return permission;
+	}
+
 	async assignPermission(roleId: string, permissionId: string): Promise<Role> {
 		// Verificar que el rol existe
-		await this.prisma.role.findUniqueOrThrow({
-			where: { id: roleId },
-		});
+		await this.findRoleOrThrow(roleId);
 
 		// Verificar que el permiso exists
-		await this.prisma.permission.findUniqueOrThrow({
-			where: { id: permissionId },
-		});
+		await this.findPermissionOrThrow(permissionId);
 
 		// Crear la relación si no existe
 		await this.prisma.rolePermission.upsert({
@@ -115,7 +148,16 @@ export class RoleService {
 
 	async removePermission(roleId: string, permissionId: string): Promise<Role> {
 		// Verificar que el rol existe
-		await this.prisma.role.findUniqueOrThrow({ where: { id: roleId } });
+		await this.findRoleOrThrow(roleId);
+		await this.findPermissionOrThrow(permissionId);
+
+		// Que el permiso exista no implica que este rol lo tenga, y borrar una
+		// fila ausente es el mismo 500 que todo lo demás.
+		const assignment = await this.prisma.rolePermission.findUnique({
+			where: { roleId_permissionId: { roleId, permissionId } },
+		});
+		if (!assignment)
+			throw new NotFoundException('Role does not hold that permission');
 
 		// Eliminar la relación
 		await this.prisma.rolePermission.delete({

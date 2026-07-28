@@ -9,7 +9,7 @@ Template de backend en NestJS + Fastify + Prisma pensado para aplicaciones con r
 - **Autorización avanzada**: RBAC con jerarquías de roles, permisos temporales, ABAC por políticas, ownership de recursos y guardas reutilizables (JWT, permisos, resource-owner, ABAC).
 - **Auditoría y observabilidad**: Auditoría de acciones y cambios (audit log + change log), correlación de requests, logger Pino a consola y archivos rotados, interceptores y filtros globales de errores.
 - **Módulos incluidos**: Auth, User, Role, Permission, Session, Api-Key, Audit-Log, Settings, Health, más servicios core (CSRF, login attempts, notification port, security alerts, 2FA, policy engine).
-- **Calidad**: 315 tests unitarios y 112 e2e contra PostgreSQL real, CI en GitHub Actions, imagen Docker multi-stage.
+- **Calidad**: 315 tests unitarios y 153 e2e contra PostgreSQL real —sin módulos sin cobertura—, CI en GitHub Actions, imagen Docker multi-stage.
 - **OpenAPI**: Swagger con bearer y API Key en `/swagger`, prefijo global `api/v1`.
 
 ## Requisitos
