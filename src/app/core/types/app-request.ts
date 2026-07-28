@@ -37,8 +37,6 @@ export type SafeUser = Omit<
 	| 'deletedAt'
 >;
 
-export type AuthRequest = FastifyRequest & { user: User };
-
 /**
  * What JwtAuthGuard attaches to the request: the token payload, plus `id` as
  * an alias of `userId`.
@@ -48,6 +46,19 @@ export type AuthRequest = FastifyRequest & { user: User };
  * it under that name too. Without it those consumers see `undefined`.
  */
 export type JwtPrincipal = JWTPayload & { id: string };
+
+/**
+ * A request that has passed JwtAuthGuard.
+ *
+ * `user` is the JWT principal — **not** a `User` row. It used to be typed as
+ * `User`, which was a lie the compiler could not catch: the payload carries
+ * `userId`, `fullName`, `email`, `device` and `perm`, and nothing else. Every
+ * consumer reading a column that only exists in the database (`password`,
+ * `confirmed`, `blocked`, …) silently got `undefined`, which is how the
+ * `update-password` and ABAC-context defects survived a typecheck and a full
+ * test suite. Anything that needs a column has to load the row itself.
+ */
+export type AuthRequest = FastifyRequest & { user: JwtPrincipal };
 
 export type ApiKey = {
 	id: string;

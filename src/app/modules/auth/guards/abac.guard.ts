@@ -51,9 +51,21 @@ export class AbacGuard implements CanActivate {
 		}
 
 		const request: AuthRequest = context.switchToHttp().getRequest();
-		const user = request.user as Partial<User>;
+		const principal = request.user;
 
-		if (!user?.id) {
+		if (!principal?.id) {
+			throw new ForbiddenException('Unauthorized principal');
+		}
+
+		// The principal is the JWT payload — it has no `confirmed` or `blocked`.
+		// Building the policy context straight from it made `userStatus` read
+		// 'pending' for everyone, so the template's own `can_edit_active_users`
+		// policy denied every request. The row is what carries those columns.
+		const user = await this.prisma.user.findUnique({
+			where: { id: principal.id },
+		});
+
+		if (!user) {
 			throw new ForbiddenException('Unauthorized principal');
 		}
 
@@ -69,8 +81,8 @@ export class AbacGuard implements CanActivate {
 
 		// Construir contexto de políticas
 		const policyContext =
-			metadata.contextBuilder?.(request, user as User) ||
-			this.buildDefaultContext(request, user as User);
+			metadata.contextBuilder?.(request, user) ||
+			this.buildDefaultContext(request, user);
 
 		// Verificar si alguno de los roles del usuario cumple la política
 		for (const ur of userRoles) {
