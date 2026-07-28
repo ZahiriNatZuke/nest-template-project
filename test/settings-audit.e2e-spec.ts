@@ -64,6 +64,29 @@ describe('Settings and audit log (e2e)', () => {
 	const loginAdmin = (): Promise<AuthContext> =>
 		authenticate(http() as never, fixtures.adminUser.email, fixtures.password);
 
+	/**
+	 * Waits for an audit entry to land.
+	 *
+	 * AuditInterceptor writes inside `tap(async () => …)`, and `tap` does not
+	 * await the promise it is handed — so the response is sent before the row
+	 * exists. Reading straight after a 2xx is therefore a race, one that happens
+	 * to pass on a fast local database and failed on CI. Polling makes the spec
+	 * deterministic without pretending the write is synchronous.
+	 */
+	async function waitForAuditEntries(
+		where: { action?: string },
+		timeoutMs = 5000
+	): Promise<Array<{ action: string; entityType: string | null }>> {
+		const deadline = Date.now() + timeoutMs;
+
+		for (;;) {
+			const entries = await prisma.auditLog.findMany({ where });
+			if (entries.length > 0) return entries;
+			if (Date.now() > deadline) return entries;
+			await new Promise(resolve => setTimeout(resolve, 50));
+		}
+	}
+
 	describe('settings', () => {
 		it('creates and reads back a key', async () => {
 			const auth = await loginAdmin();
@@ -164,9 +187,7 @@ describe('Settings and audit log (e2e)', () => {
 				.send({ key: 'audited_key', value: 'x' })
 				.expect(201);
 
-			const entries = await prisma.auditLog.findMany({
-				where: { action: 'settings.create' },
-			});
+			const entries = await waitForAuditEntries({ action: 'settings.create' });
 			expect(entries.length).toBeGreaterThanOrEqual(1);
 			expect(entries[0].entityType).toBe('settings');
 		});
@@ -187,9 +208,7 @@ describe('Settings and audit log (e2e)', () => {
 				.set('Cookie', auth.cookie)
 				.expect(200);
 
-			const entries = await prisma.auditLog.findMany({
-				where: { action: 'settings.delete' },
-			});
+			const entries = await waitForAuditEntries({ action: 'settings.delete' });
 			expect(entries.length).toBeGreaterThanOrEqual(1);
 		});
 
@@ -217,6 +236,7 @@ describe('Settings and audit log (e2e)', () => {
 				.set('Cookie', auth.cookie)
 				.send({ key: 'listed_key', value: 'x' })
 				.expect(201);
+			await waitForAuditEntries({ action: 'settings.create' });
 
 			const res = await http()
 				.get(`${API}/audit-log`)
@@ -237,6 +257,7 @@ describe('Settings and audit log (e2e)', () => {
 				.set('Cookie', auth.cookie)
 				.send({ key: 'filtered_key', value: 'x' })
 				.expect(201);
+			await waitForAuditEntries({ action: 'settings.create' });
 
 			const res = await http()
 				.get(`${API}/audit-log?action=settings.create`)
