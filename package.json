@@ -80,7 +80,7 @@
     "@nestjs/cli": "11.0.24",
     "@nestjs/testing": "11.1.28",
     "@swc/cli": "0.8.1",
-    "@swc/core": "1.15.46",
+    "@swc/core": "1.15.47",
     "@swc/jest": "0.2.39",
     "@types/bcrypt": "6.0.0",
     "@types/jest": "30.0.0",
