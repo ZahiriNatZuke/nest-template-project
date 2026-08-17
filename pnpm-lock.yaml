@@ -118,8 +118,8 @@ importers:
         specifier: 0.2.2
         version: 0.2.2
       rotating-file-stream:
-        specifier: 3.2.9
-        version: 3.2.9
+        specifier: 3.2.10
+        version: 3.2.10
       rxjs:
         specifier: 7.8.2
         version: 7.8.2
@@ -3234,8 +3234,8 @@ packages:
     resolution: {integrity: sha512-qsda+H8jTaUaN/x5vzW2rzc+8Rw4TAQ/4KjB46IwK5VH+IlVeeeje/EoZRpiXvIqjFgK84QffqPztGI3VBLG1A==}
     engines: {node: '>=6'}
 
-  libphonenumber-js@1.13.9:
-    resolution: {integrity: sha512-VNS5vWMM7r0P66BYv+TQJATxExEgLxN+34hfHDVhDkUsGAE4cRg0shCNSLTXNKm7nIUscC7AfB51TjxEeF7msQ==}
+  libphonenumber-js@1.13.11:
+    resolution: {integrity: sha512-ETER2kMaIFTI/Nh1a8Gk03dUF/SL0VZqtI+CcVHZxp5WIHYwNS7S+uiYZDYCvLy3lOR4/DAD5jf0h5WkePPpqg==}
 
   light-my-request@6.6.0:
     resolution: {integrity: sha512-CHYbu8RtboSIoVsHZ6Ye4cj4Aw/yg2oAFimlF7mNvfDV192LR7nDiKtSIfCuLT7KokPSTn/9kfVLm5OGN0A28A==}
@@ -3894,8 +3894,8 @@ packages:
   robust-predicates@3.0.3:
     resolution: {integrity: sha512-NS3levdsRIUOmiJ8FZWCP7LG3QpJyrs/TE0Zpf1yvZu8cAJJ6QMW92H1c7kWpdIHo8RvmLxN/o2JXTKHp74lUA==}
 
-  rotating-file-stream@3.2.9:
-    resolution: {integrity: sha512-i9i0KkHh12ryl4xtELg+0gyoFre2PJ9RcQQLzquWsiqygyYsrZLckrqqYrthhnJZGZb4g+KUHtcoWYVq34gaug==}
+  rotating-file-stream@3.2.10:
+    resolution: {integrity: sha512-9kviflu1v0iTD3MNoRLjPuuqLTsTOrovKdadoSYcUsgY5mKFNuhcM7WifJcwvxfIP6YJdVVxgWQr9YS3lJS+bg==}
     engines: {node: '>=14.0'}
 
   rxjs@7.8.1:
@@ -6694,7 +6694,7 @@ snapshots:
   class-validator@0.14.1:
     dependencies:
       '@types/validator': 13.15.10
-      libphonenumber-js: 1.13.9
+      libphonenumber-js: 1.13.11
       validator: 13.15.35
     optional: true
 
@@ -7916,7 +7916,7 @@ snapshots:
 
   leven@3.1.0: {}
 
-  libphonenumber-js@1.13.9:
+  libphonenumber-js@1.13.11:
     optional: true
 
   light-my-request@6.6.0:
@@ -8532,7 +8532,7 @@ snapshots:
 
   robust-predicates@3.0.3: {}
 
-  rotating-file-stream@3.2.9: {}
+  rotating-file-stream@3.2.10: {}
 
   rxjs@7.8.1:
     dependencies:
