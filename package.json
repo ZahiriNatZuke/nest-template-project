@@ -72,7 +72,7 @@
     "reflect-metadata": "0.2.2",
     "rotating-file-stream": "3.2.9",
     "rxjs": "7.8.2",
-    "zod": "4.4.3",
+    "zod": "4.5.1",
     "zxcvbn": "4.4.2"
   },
   "devDependencies": {
